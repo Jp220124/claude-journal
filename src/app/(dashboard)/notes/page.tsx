@@ -227,6 +227,7 @@ function NotesPageContent() {
   const noteIdFromUrl = searchParams.get('note')
 
   const [notes, setNotes] = useState<Note[]>([])
+  const [allRecentNotes, setAllRecentNotes] = useState<Note[]>([]) // All recent notes across all folders
   const [folders, setFolders] = useState<NoteFolderWithNotes[]>([])
   const [selectedNote, setSelectedNote] = useState<Note | null>(null)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
@@ -293,6 +294,7 @@ function NotesPageContent() {
   const loadData = useCallback(async (forceReload = false) => {
     if (isDemo) {
       setNotes(demoNotes)
+      setAllRecentNotes(demoNotes.filter(n => !n.is_archived))
       setFolders(demoFolders)
       setTags(demoTags)
       setFolderTree(demoFolderTree)
@@ -320,13 +322,15 @@ function NotesPageContent() {
 
       // Fetch folders, notes, tags, and folder tree in parallel
       // When viewing archive, don't filter by folderId - we want ALL archived notes
-      const [foldersData, notesData, tagsData, treeData, rootCount, archiveCount] = await Promise.all([
+      // Also fetch ALL recent notes (no folder filter) for the Recent section
+      const [foldersData, notesData, allNotesData, tagsData, treeData, rootCount, archiveCount] = await Promise.all([
         fetchFoldersWithCounts(),
         fetchNotes({
           folderId: showArchived ? undefined : selectedFolderId,
           includeArchived: showArchived,
           archivedOnly: showArchived,
         }),
+        fetchNotes({ includeArchived: false }), // All non-archived notes for Recent section
         fetchTags(),
         fetchNoteFolderTree(),
         getRootNoteCount(),
@@ -335,6 +339,7 @@ function NotesPageContent() {
 
       setFolders(foldersData)
       setNotes(notesData)
+      setAllRecentNotes(allNotesData)
       setTags(tagsData)
       setFolderTree(treeData)
       setRootNoteCount(rootCount)
@@ -469,13 +474,13 @@ function NotesPageContent() {
     return () => clearTimeout(debounce)
   }, [handleSearch])
 
-  // Get recent notes (last 5, sorted by updated_at)
+  // Get recent notes (last 5, sorted by updated_at) - from ALL folders, not just selected
   const recentNotes = useMemo(() => {
-    return [...notes]
+    return [...allRecentNotes]
       .filter(n => !n.is_archived)
       .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
       .slice(0, 5)
-  }, [notes])
+  }, [allRecentNotes])
 
   // Sort notes for list
   const sortedNotes = useMemo(() => {
@@ -524,6 +529,7 @@ function NotesPageContent() {
         updated_at: new Date().toISOString(),
       }
       setNotes([newNote, ...notes])
+      setAllRecentNotes([newNote, ...allRecentNotes])
       setSelectedNote(newNote)
       return
     }
@@ -536,6 +542,7 @@ function NotesPageContent() {
       })
       if (newNote) {
         setNotes([newNote, ...notes])
+        setAllRecentNotes([newNote, ...allRecentNotes])
         setSelectedNote(newNote)
         setTimeout(() => titleInputRef.current?.focus(), 100)
       }
@@ -559,6 +566,7 @@ function NotesPageContent() {
     if (isDemo) {
       // For demo mode, we can update notes array since there's no server save
       setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...updates } : n))
+      setAllRecentNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...updates } : n))
       return
     }
 
@@ -581,6 +589,7 @@ function NotesPageContent() {
         await updateNote(noteId, updates)
         // Update notes array AFTER successful save - this updates the sidebar preview
         setNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...updates } : n))
+        setAllRecentNotes(prev => prev.map(n => n.id === noteId ? { ...n, ...updates } : n))
       } catch (error) {
         console.error('Error updating note:', error)
       } finally {
@@ -606,6 +615,7 @@ function NotesPageContent() {
 
     // Optimistic update
     setNotes(prev => prev.filter(n => n.id !== noteId))
+    setAllRecentNotes(prev => prev.filter(n => n.id !== noteId))
     if (selectedNote?.id === noteId) {
       setSelectedNote(notes.find(n => n.id !== noteId) || null)
     }
@@ -624,6 +634,7 @@ function NotesPageContent() {
   const handleTogglePin = async (noteId: string, isPinned: boolean) => {
     // Optimistic update
     setNotes(prev => prev.map(n => n.id === noteId ? { ...n, is_pinned: !isPinned } : n))
+    setAllRecentNotes(prev => prev.map(n => n.id === noteId ? { ...n, is_pinned: !isPinned } : n))
     if (selectedNote?.id === noteId) {
       setSelectedNote(prev => prev ? { ...prev, is_pinned: !isPinned } : null)
     }
@@ -642,6 +653,17 @@ function NotesPageContent() {
   const handleToggleArchive = async (noteId: string, isArchived: boolean) => {
     // Optimistic update
     setNotes(prev => prev.map(n => n.id === noteId ? { ...n, is_archived: !isArchived } : n))
+    // Update allRecentNotes - remove if archiving, update if unarchiving
+    if (!isArchived) {
+      // Archiving - remove from recent
+      setAllRecentNotes(prev => prev.filter(n => n.id !== noteId))
+    } else {
+      // Unarchiving - add back to recent (will be re-sorted by useMemo)
+      const noteToUnarchive = notes.find(n => n.id === noteId)
+      if (noteToUnarchive) {
+        setAllRecentNotes(prev => [{ ...noteToUnarchive, is_archived: false }, ...prev])
+      }
+    }
     if (selectedNote?.id === noteId && !showArchived) {
       setSelectedNote(notes.find(n => n.id !== noteId) || null)
     }
@@ -663,6 +685,7 @@ function NotesPageContent() {
   const handleMoveToFolder = async (noteId: string, folderId: string | null) => {
     // Optimistic update
     setNotes(prev => prev.map(n => n.id === noteId ? { ...n, folder_id: folderId } : n))
+    setAllRecentNotes(prev => prev.map(n => n.id === noteId ? { ...n, folder_id: folderId } : n))
     if (selectedNote?.id === noteId) {
       setSelectedNote(prev => prev ? { ...prev, folder_id: folderId } : null)
     }
