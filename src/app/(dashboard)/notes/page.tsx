@@ -319,9 +319,14 @@ function NotesPageContent() {
       }
 
       // Fetch folders, notes, tags, and folder tree in parallel
+      // When viewing archive, don't filter by folderId - we want ALL archived notes
       const [foldersData, notesData, tagsData, treeData, rootCount, archiveCount] = await Promise.all([
         fetchFoldersWithCounts(),
-        fetchNotes({ folderId: selectedFolderId, includeArchived: showArchived }),
+        fetchNotes({
+          folderId: showArchived ? undefined : selectedFolderId,
+          includeArchived: showArchived,
+          archivedOnly: showArchived,
+        }),
         fetchTags(),
         fetchNoteFolderTree(),
         getRootNoteCount(),

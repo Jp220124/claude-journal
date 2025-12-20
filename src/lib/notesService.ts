@@ -34,6 +34,7 @@ const DEFAULT_NOTE_CONTENT = {
 export async function fetchNotes(options?: {
   folderId?: string | null
   includeArchived?: boolean
+  archivedOnly?: boolean
   searchQuery?: string
 }): Promise<Note[]> {
   const supabase = createClient()
@@ -48,7 +49,7 @@ export async function fetchNotes(options?: {
     .order('is_pinned', { ascending: false })
     .order('updated_at', { ascending: false })
 
-  // Filter by folder
+  // Filter by folder (skip when viewing archived notes - we want all archived regardless of folder)
   if (options?.folderId !== undefined) {
     if (options.folderId === null) {
       query = query.is('folder_id', null)
@@ -57,10 +58,15 @@ export async function fetchNotes(options?: {
     }
   }
 
-  // Filter archived
-  if (!options?.includeArchived) {
+  // Filter archived notes
+  if (options?.archivedOnly) {
+    // Only show archived notes
+    query = query.eq('is_archived', true)
+  } else if (!options?.includeArchived) {
+    // Exclude archived notes (default behavior)
     query = query.eq('is_archived', false)
   }
+  // If includeArchived is true but archivedOnly is false, no filter is applied (show all)
 
   const { data, error } = await query
 
