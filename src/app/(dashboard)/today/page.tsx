@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, linkifyText } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { isDemoAccount, demoTasksData } from '@/lib/demo'
 import { LinkedNotesPanel } from '@/components/notes'

@@ -1,7 +1,43 @@
 import { clsx, type ClassValue } from 'clsx'
+import React from 'react'
 
 export function cn(...inputs: ClassValue[]) {
   return clsx(inputs)
+}
+
+// URL regex pattern - matches http:// and https:// URLs
+const URL_REGEX = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi
+
+/**
+ * Converts text containing URLs into React elements with clickable links
+ * Links open in new tab with security attributes
+ */
+export function linkifyText(text: string): React.ReactNode {
+  if (!text) return text
+
+  const parts = text.split(URL_REGEX)
+
+  if (parts.length === 1) return text
+
+  return parts.map((part, index) => {
+    if (URL_REGEX.test(part)) {
+      // Reset regex lastIndex since we're reusing it
+      URL_REGEX.lastIndex = 0
+      return React.createElement(
+        'a',
+        {
+          key: index,
+          href: part,
+          target: '_blank',
+          rel: 'noopener noreferrer',
+          onClick: (e: React.MouseEvent) => e.stopPropagation(),
+          className: 'text-blue-600 hover:text-blue-800 underline',
+        },
+        part
+      )
+    }
+    return part
+  })
 }
 
 export function formatDate(date: Date | string): string {

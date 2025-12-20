@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek } from 'date-fns'
 import { useAuthStore } from '@/stores/authStore'
+import { linkifyText } from '@/lib/utils'
 import { isDemoAccount, demoCalendarData, demoCalendarSidebar } from '@/lib/demo'
 import { fetchTodosForRange } from '@/lib/taskCategoryService'
 import { fetchJournalEntriesRange } from '@/lib/journalService'
@@ -416,7 +417,7 @@ export default function CalendarPage() {
                   <span className={`text-sm font-medium ${
                     task.completed ? 'text-slate-500 line-through decoration-slate-400' : 'text-slate-700'
                   }`}>
-                    {task.title}
+                    {linkifyText(task.title)}
                   </span>
                   {!task.completed && (
                     <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
@@ -448,7 +449,7 @@ export default function CalendarPage() {
                     <span className={`text-sm font-medium ${
                       task.completed ? 'text-slate-500 line-through decoration-slate-400' : 'text-slate-700'
                     }`}>
-                      {task.title}
+                      {linkifyText(task.title)}
                     </span>
                     {task.priority === 'high' && !task.completed && (
                       <span className="ml-2 px-1.5 py-0.5 text-[10px] font-bold uppercase bg-red-50 text-red-600 rounded">High</span>

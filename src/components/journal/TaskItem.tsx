@@ -1,6 +1,6 @@
 'use client'
 
-import { cn } from '@/lib/utils'
+import { cn, linkifyText } from '@/lib/utils'
 import { Check } from 'lucide-react'
 import type { TaskInstance } from '@/types/database'
 
@@ -39,7 +39,7 @@ export function TaskItem({ task, onToggle }: TaskItemProps) {
           task.is_completed && 'line-through text-[var(--muted-foreground)]'
         )}
       >
-        {task.title}
+        {linkifyText(task.title)}
       </span>
     </div>
   )

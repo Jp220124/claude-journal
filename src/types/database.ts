@@ -762,3 +762,60 @@ export interface NoteFolderWithNotes extends NoteFolder {
   notes: Note[]
   note_count?: number
 }
+
+// =====================================================
+// Note Folder Tree Types (for hierarchical display)
+// =====================================================
+
+export interface NoteFolderTreeNode extends NoteFolder {
+  children: NoteFolderTreeNode[]
+  note_count: number
+  depth: number
+  isExpanded?: boolean
+}
+
+export interface NoteBreadcrumbSegment {
+  id: string
+  name: string
+}
+
+// =====================================================
+// Note Sharing Types
+// =====================================================
+
+export interface NoteShare {
+  id: string
+  note_id: string
+  share_token: string
+  created_by: string
+  expires_at: string | null
+  is_active: boolean
+  password_hash: string | null
+  view_count: number
+  allow_copy: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface NoteShareInsert {
+  note_id: string
+  expires_at?: string | null
+  password?: string | null
+  allow_copy?: boolean
+}
+
+export interface NoteShareUpdate {
+  expires_at?: string | null
+  is_active?: boolean
+  password?: string | null
+  allow_copy?: boolean
+}
+
+export interface PublicNote {
+  note_id: string
+  title: string
+  content: Record<string, unknown>
+  allow_copy: boolean
+  has_password: boolean
+  created_at: string
+}

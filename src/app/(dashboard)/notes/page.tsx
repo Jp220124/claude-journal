@@ -9,6 +9,11 @@ import { isDemoAccount } from '@/lib/demo'
 import {
   fetchNotes,
   fetchFoldersWithCounts,
+  fetchNoteFolderTree,
+  getRootNoteCount,
+  getArchivedNoteCount,
+  getNoteFolderPath,
+  moveNotesToFolder,
   createNote,
   updateNote,
   deleteNote,
@@ -42,8 +47,10 @@ import {
   NotesErrorBoundary,
   NotesEmptyState,
 } from '@/components/notes'
+import { NoteFolderTree } from '@/components/notes/NoteFolderTree'
+import { ShareNoteDialog } from '@/components/notes/ShareNoteDialog'
 import type { LinkedTask } from '@/lib/notes/taskLinks'
-import type { Note, NoteFolder, NoteFolderWithNotes, NoteTag } from '@/types/database'
+import type { Note, NoteFolder, NoteFolderWithNotes, NoteTag, NoteFolderTreeNode, NoteBreadcrumbSegment } from '@/types/database'
 
 // Demo data for non-authenticated users
 const demoNotes: Note[] = [
@@ -123,6 +130,96 @@ const demoTags: NoteTag[] = [
   { id: 'demo-tag-3', user_id: 'demo', name: 'Research', color: '#3b82f6', created_at: new Date().toISOString() },
 ]
 
+// Demo folder tree with hierarchical structure
+const demoFolderTree: NoteFolderTreeNode[] = [
+  {
+    id: 'demo-folder-1',
+    user_id: 'demo',
+    name: 'Personal',
+    icon: 'person',
+    color: '#0ea5e9',
+    parent_folder_id: null,
+    order_index: 0,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    children: [
+      {
+        id: 'demo-folder-1-1',
+        user_id: 'demo',
+        name: 'Daily Journal',
+        icon: 'edit_note',
+        color: '#0ea5e9',
+        parent_folder_id: 'demo-folder-1',
+        order_index: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        children: [],
+        note_count: 0,
+        depth: 1,
+      },
+    ],
+    note_count: 0,
+    depth: 0,
+  },
+  {
+    id: 'demo-folder-2',
+    user_id: 'demo',
+    name: 'Work',
+    icon: 'work',
+    color: '#f59e0b',
+    parent_folder_id: null,
+    order_index: 1,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    children: [
+      {
+        id: 'demo-folder-2-1',
+        user_id: 'demo',
+        name: 'Projects',
+        icon: 'folder',
+        color: '#f59e0b',
+        parent_folder_id: 'demo-folder-2',
+        order_index: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        children: [],
+        note_count: 0,
+        depth: 1,
+      },
+      {
+        id: 'demo-folder-2-2',
+        user_id: 'demo',
+        name: 'Meetings',
+        icon: 'groups',
+        color: '#f59e0b',
+        parent_folder_id: 'demo-folder-2',
+        order_index: 1,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        children: [],
+        note_count: 0,
+        depth: 1,
+      },
+    ],
+    note_count: 0,
+    depth: 0,
+  },
+  {
+    id: 'demo-folder-3',
+    user_id: 'demo',
+    name: 'Ideas',
+    icon: 'lightbulb',
+    color: '#a855f7',
+    parent_folder_id: null,
+    order_index: 2,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    children: [],
+    note_count: 0,
+    depth: 0,
+  },
+]
+
 function NotesPageContent() {
   const { user } = useAuthStore()
   const isDemo = isDemoAccount(user?.email)
@@ -140,6 +237,16 @@ function NotesPageContent() {
 
   // Panel state
   const [isPanelOpen, setIsPanelOpen] = useState(true)
+
+  // Folder tree state
+  const [folderTree, setFolderTree] = useState<NoteFolderTreeNode[]>([])
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(new Set())
+  const [breadcrumbPath, setBreadcrumbPath] = useState<NoteBreadcrumbSegment[]>([])
+  const [rootNoteCount, setRootNoteCount] = useState(0)
+  const [archivedNoteCount, setArchivedNoteCount] = useState(0)
+
+  // Share dialog state
+  const [showShareDialog, setShowShareDialog] = useState(false)
 
   // Tags state
   const [tags, setTags] = useState<NoteTag[]>([])
@@ -188,6 +295,9 @@ function NotesPageContent() {
       setNotes(demoNotes)
       setFolders(demoFolders)
       setTags(demoTags)
+      setFolderTree(demoFolderTree)
+      setRootNoteCount(demoNotes.filter(n => !n.is_archived).length)
+      setArchivedNoteCount(0)
       if (!selectedNoteRef.current) {
         setSelectedNote(demoNotes[0])
       }
@@ -206,16 +316,22 @@ function NotesPageContent() {
         starterFoldersCreated.current = true
       }
 
-      // Fetch folders, notes, and tags in parallel
-      const [foldersData, notesData, tagsData] = await Promise.all([
+      // Fetch folders, notes, tags, and folder tree in parallel
+      const [foldersData, notesData, tagsData, treeData, rootCount, archiveCount] = await Promise.all([
         fetchFoldersWithCounts(),
         fetchNotes({ folderId: selectedFolderId, includeArchived: showArchived }),
         fetchTags(),
+        fetchNoteFolderTree(),
+        getRootNoteCount(),
+        getArchivedNoteCount(),
       ])
 
       setFolders(foldersData)
       setNotes(notesData)
       setTags(tagsData)
+      setFolderTree(treeData)
+      setRootNoteCount(rootCount)
+      setArchivedNoteCount(archiveCount)
 
       // Select first note only on initial load or if explicitly forcing reload
       if (notesData.length > 0 && !selectedNoteRef.current) {
@@ -232,6 +348,19 @@ function NotesPageContent() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Update breadcrumb when folder changes
+  useEffect(() => {
+    const updateBreadcrumb = async () => {
+      if (isDemo || !selectedFolderId) {
+        setBreadcrumbPath([])
+        return
+      }
+      const path = await getNoteFolderPath(selectedFolderId)
+      setBreadcrumbPath(path)
+    }
+    updateBreadcrumb()
+  }, [selectedFolderId, isDemo])
 
   // Handle note selection from URL query parameter (e.g., /notes?note=xxx)
   useEffect(() => {
@@ -684,6 +813,55 @@ function NotesPageContent() {
     }
   }
 
+  // Folder tree handlers
+  const handleFolderExpand = (folderId: string) => {
+    setExpandedFolderIds(prev => new Set([...prev, folderId]))
+  }
+
+  const handleFolderCollapse = (folderId: string) => {
+    setExpandedFolderIds(prev => {
+      const newSet = new Set(prev)
+      newSet.delete(folderId)
+      return newSet
+    })
+  }
+
+  const handleCreateSubfolder = async (parentFolderId: string | null) => {
+    if (isDemo) return
+
+    try {
+      await createFolder({
+        name: 'New Folder',
+        parent_id: parentFolderId,
+        icon: 'folder',
+        color: '#0ea5e9',
+      })
+      // Expand the parent folder if creating a subfolder
+      if (parentFolderId) {
+        setExpandedFolderIds(prev => new Set([...prev, parentFolderId]))
+      }
+      await loadData()
+    } catch (error) {
+      console.error('Error creating subfolder:', error)
+    }
+  }
+
+  const handleNoteDrop = async (noteIds: string[], folderId: string | null) => {
+    if (isDemo) return
+
+    try {
+      await moveNotesToFolder(noteIds, folderId)
+      await loadData()
+    } catch (error) {
+      console.error('Error moving notes to folder:', error)
+    }
+  }
+
+  const handleShowArchive = () => {
+    setShowArchived(true)
+    setSelectedFolderId(null)
+  }
+
   const openFolderModal = (folder?: NoteFolder) => {
     if (folder) {
       setEditingFolder(folder)
@@ -787,129 +965,28 @@ function NotesPageContent() {
 
           {/* Panel Content */}
           <div className="flex-1 overflow-y-auto px-2 py-4 space-y-6">
-          {/* Collections Section */}
-          <nav aria-label="Note collections" className="space-y-1">
+          {/* Folder Tree Section */}
+          <nav aria-label="Note folders" className="space-y-1">
             <div className="flex items-center justify-between px-3 mb-2">
-              <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Collections</h3>
+              <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Folders</h3>
             </div>
-            <ul className="space-y-0.5" role="list">
-              {/* All Notes */}
-              <li>
-                <button
-                  onClick={() => { setSelectedFolderId(null); setShowArchived(false); }}
-                  aria-current={selectedFolderId === null && !showArchived ? 'true' : undefined}
-                  className={cn(
-                    'w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors group',
-                    selectedFolderId === null && !showArchived
-                      ? 'bg-cyan-50 dark:bg-cyan-900/30 text-slate-900 dark:text-slate-100'
-                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
-                  )}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className={cn(
-                      'material-symbols-outlined text-[20px]',
-                      selectedFolderId === null && !showArchived ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-slate-100'
-                    )}>
-                      format_list_bulleted
-                    </span>
-                    <span className="text-sm font-medium">All Notes</span>
-                  </div>
-                  <span className={cn(
-                    'text-xs',
-                    selectedFolderId === null && !showArchived ? 'font-bold text-cyan-600 dark:text-cyan-400' : 'text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400'
-                  )}>
-                    {notes.filter(n => !n.is_archived).length}
-                  </span>
-                </button>
-              </li>
-
-              {/* Folders (filter out any folder named "Archive" since we have a dedicated Archive toggle) */}
-              {folders.filter(f => f.name.toLowerCase() !== 'archive').map(folder => (
-                <li key={folder.id} className="group/folder relative">
-                  <button
-                    onClick={() => { setSelectedFolderId(folder.id); setShowArchived(false); }}
-                    aria-current={selectedFolderId === folder.id ? 'true' : undefined}
-                    className={cn(
-                      'w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors',
-                      selectedFolderId === folder.id
-                        ? 'bg-cyan-50 dark:bg-cyan-900/30 text-slate-900 dark:text-slate-100'
-                        : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
-                    )}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className="material-symbols-outlined text-[20px]"
-                        style={{
-                          color: folder.color,
-                          fontVariationSettings: "'FILL' 1"
-                        }}
-                      >
-                        {folder.icon}
-                      </span>
-                      <span className={cn(
-                        'text-sm',
-                        selectedFolderId === folder.id ? 'font-bold' : 'font-medium'
-                      )}>
-                        {folder.name}
-                      </span>
-                    </div>
-                    <span className={cn(
-                      'text-xs',
-                      selectedFolderId === folder.id ? 'font-bold text-cyan-600 dark:text-cyan-400' : 'text-slate-300 dark:text-slate-600 group-hover/folder:text-slate-500 dark:group-hover/folder:text-slate-400'
-                    )}>
-                      {folder.note_count || 0}
-                    </span>
-                  </button>
-                  {/* Folder edit/delete buttons */}
-                  <div className="absolute right-8 top-1/2 -translate-y-1/2 hidden group-hover/folder:flex items-center gap-1">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        openFolderModal(folder)
-                      }}
-                      aria-label={`Edit folder ${folder.name}`}
-                      className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">edit</span>
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleDeleteFolder(folder.id)
-                      }}
-                      aria-label={`Delete folder ${folder.name}`}
-                      className="p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">delete</span>
-                    </button>
-                  </div>
-                </li>
-              ))}
-
-              {/* Archive */}
-              <li>
-                <button
-                  onClick={() => { setShowArchived(true); setSelectedFolderId(null); }}
-                  aria-current={showArchived ? 'true' : undefined}
-                  className={cn(
-                    'w-full flex items-center justify-between px-3 py-2 rounded-lg transition-colors group',
-                    showArchived
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100'
-                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100'
-                  )}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <span className={cn(
-                      'material-symbols-outlined text-[20px]',
-                      showArchived ? 'text-slate-600 dark:text-slate-400' : 'text-slate-400 dark:text-slate-500 group-hover:text-slate-900 dark:group-hover:text-slate-100'
-                    )}>
-                      archive
-                    </span>
-                    <span className="text-sm font-medium">Archive</span>
-                  </div>
-                </button>
-              </li>
-            </ul>
+            <NoteFolderTree
+              folders={folderTree}
+              selectedFolderId={selectedFolderId}
+              expandedFolderIds={expandedFolderIds}
+              rootNoteCount={rootNoteCount}
+              archivedNoteCount={archivedNoteCount}
+              showArchive={showArchived}
+              onFolderSelect={(folderId) => { setSelectedFolderId(folderId); setShowArchived(false); }}
+              onFolderExpand={handleFolderExpand}
+              onFolderCollapse={handleFolderCollapse}
+              onCreateFolder={handleCreateSubfolder}
+              onRenameFolder={(folder) => openFolderModal(folder)}
+              onDeleteFolder={handleDeleteFolder}
+              onNoteDrop={handleNoteDrop}
+              onShowArchive={handleShowArchive}
+              isDemo={isDemo}
+            />
           </nav>
 
           {/* Recent Section - Uses memoized component to prevent flicker during typing */}
@@ -1026,6 +1103,15 @@ function NotesPageContent() {
                   {selectedNote.is_archived ? 'unarchive' : 'archive'}
                 </span>
               </button>
+              {!isDemo && (
+                <button
+                  onClick={() => setShowShareDialog(true)}
+                  className="p-2 rounded-lg text-slate-400 dark:text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 transition-colors"
+                  aria-label="Share note"
+                >
+                  <span className="material-symbols-outlined text-[20px]">share</span>
+                </button>
+              )}
 
               {/* Divider */}
               <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-2 hidden sm:block"></div>
@@ -1268,6 +1354,13 @@ function NotesPageContent() {
           isDemo={isDemo}
         />
       )}
+
+      {/* Share Note Dialog */}
+      <ShareNoteDialog
+        note={selectedNote}
+        isOpen={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+      />
     </div>
     </NotesErrorBoundary>
   )

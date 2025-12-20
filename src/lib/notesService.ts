@@ -11,6 +11,11 @@ import type {
   NoteTagUpdate,
   NoteWithTags,
   NoteFolderWithNotes,
+  NoteFolderTreeNode,
+  NoteBreadcrumbSegment,
+  NoteShare,
+  NoteShareInsert,
+  PublicNote,
 } from '@/types/database'
 
 // =====================================================
@@ -691,4 +696,346 @@ export async function getNoteStats(): Promise<{
   }
 
   return data?.[0] || null
+}
+
+// =====================================================
+// Folder Tree Operations
+// =====================================================
+
+/**
+ * Build a hierarchical folder tree from flat folder list
+ */
+export function buildNoteFolderTree(
+  folders: NoteFolderWithNotes[],
+  parentId: string | null = null,
+  depth: number = 0
+): NoteFolderTreeNode[] {
+  return folders
+    .filter(folder => folder.parent_folder_id === parentId)
+    .sort((a, b) => a.order_index - b.order_index)
+    .map(folder => ({
+      ...folder,
+      children: buildNoteFolderTree(folders, folder.id, depth + 1),
+      note_count: folder.note_count || 0,
+      depth,
+      isExpanded: false,
+    }))
+}
+
+/**
+ * Fetch folder tree with note counts
+ */
+export async function fetchNoteFolderTree(): Promise<NoteFolderTreeNode[]> {
+  const foldersWithCounts = await fetchFoldersWithCounts()
+  return buildNoteFolderTree(foldersWithCounts)
+}
+
+/**
+ * Get root-level note count (notes not in any folder)
+ */
+export async function getRootNoteCount(): Promise<number> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return 0
+
+  const { count, error } = await supabase
+    .from('notes')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .is('folder_id', null)
+    .eq('is_archived', false)
+
+  if (error) {
+    console.error('Error fetching root note count:', error)
+    return 0
+  }
+
+  return count || 0
+}
+
+/**
+ * Get archived notes count
+ */
+export async function getArchivedNoteCount(): Promise<number> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return 0
+
+  const { count, error } = await supabase
+    .from('notes')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .eq('is_archived', true)
+
+  if (error) {
+    console.error('Error fetching archived note count:', error)
+    return 0
+  }
+
+  return count || 0
+}
+
+/**
+ * Get folder path (breadcrumb) for a folder
+ */
+export async function getNoteFolderPath(folderId: string): Promise<NoteBreadcrumbSegment[]> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // Fetch all folders to build the path
+  const { data: folders, error } = await supabase
+    .from('note_folders')
+    .select('id, name, parent_folder_id')
+    .eq('user_id', user.id)
+
+  if (error || !folders) {
+    console.error('Error fetching folders for path:', error)
+    return []
+  }
+
+  // Build path from folder to root
+  const path: NoteBreadcrumbSegment[] = []
+  let currentId: string | null = folderId
+
+  while (currentId) {
+    const folder = folders.find(f => f.id === currentId)
+    if (!folder) break
+
+    path.unshift({ id: folder.id, name: folder.name })
+    currentId = folder.parent_folder_id
+  }
+
+  return path
+}
+
+/**
+ * Move multiple notes to a folder
+ */
+export async function moveNotesToFolder(
+  noteIds: string[],
+  folderId: string | null
+): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('notes')
+    .update({ folder_id: folderId, updated_at: new Date().toISOString() })
+    .in('id', noteIds)
+
+  if (error) {
+    console.error('Error moving notes:', error)
+    return false
+  }
+
+  return true
+}
+
+// =====================================================
+// Note Sharing Operations
+// =====================================================
+
+/**
+ * Create a share link for a note
+ */
+export async function createNoteShare(options: NoteShareInsert): Promise<NoteShare | null> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    console.error('No authenticated user')
+    return null
+  }
+
+  // Generate share token
+  const { data: tokenData, error: tokenError } = await supabase.rpc('generate_share_token')
+
+  if (tokenError || !tokenData) {
+    // Fallback: generate token client-side
+    const token = crypto.randomUUID().replace(/-/g, '').substring(0, 32)
+
+    const { data, error } = await supabase
+      .from('note_shares')
+      .insert({
+        note_id: options.note_id,
+        share_token: token,
+        created_by: user.id,
+        expires_at: options.expires_at || null,
+        is_active: true,
+        allow_copy: options.allow_copy ?? true,
+        // Password would need to be hashed server-side
+      })
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating note share:', error)
+      return null
+    }
+
+    return data
+  }
+
+  const { data, error } = await supabase
+    .from('note_shares')
+    .insert({
+      note_id: options.note_id,
+      share_token: tokenData,
+      created_by: user.id,
+      expires_at: options.expires_at || null,
+      is_active: true,
+      allow_copy: options.allow_copy ?? true,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating note share:', error)
+    return null
+  }
+
+  return data
+}
+
+/**
+ * Get all shares for a note
+ */
+export async function getNoteShares(noteId: string): Promise<NoteShare[]> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('note_shares')
+    .select('*')
+    .eq('note_id', noteId)
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.error('Error fetching note shares:', error)
+    return []
+  }
+
+  return data || []
+}
+
+/**
+ * Get a note share by token (for public access)
+ */
+export async function getNoteShareByToken(token: string): Promise<NoteShare | null> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('note_shares')
+    .select('*')
+    .eq('share_token', token)
+    .eq('is_active', true)
+    .single()
+
+  if (error) {
+    console.error('Error fetching note share:', error)
+    return null
+  }
+
+  // Check expiration
+  if (data.expires_at && new Date(data.expires_at) < new Date()) {
+    return null
+  }
+
+  return data
+}
+
+/**
+ * Get public note content by share token
+ */
+export async function getPublicNote(token: string): Promise<PublicNote | null> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase.rpc('get_public_note', {
+    p_share_token: token,
+  })
+
+  if (error || !data || data.length === 0) {
+    console.error('Error fetching public note:', error)
+    return null
+  }
+
+  return data[0] as PublicNote
+}
+
+/**
+ * Increment view count for a shared note
+ */
+export async function incrementNoteShareView(token: string): Promise<void> {
+  const supabase = createClient()
+
+  await supabase.rpc('increment_note_share_view', {
+    p_share_token: token,
+  })
+}
+
+/**
+ * Revoke (deactivate) a note share
+ */
+export async function revokeNoteShare(shareId: string): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('note_shares')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', shareId)
+
+  if (error) {
+    console.error('Error revoking note share:', error)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Delete a note share permanently
+ */
+export async function deleteNoteShare(shareId: string): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('note_shares')
+    .delete()
+    .eq('id', shareId)
+
+  if (error) {
+    console.error('Error deleting note share:', error)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Update a note share
+ */
+export async function updateNoteShare(
+  shareId: string,
+  updates: { expires_at?: string | null; allow_copy?: boolean; is_active?: boolean }
+): Promise<NoteShare | null> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('note_shares')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', shareId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating note share:', error)
+    return null
+  }
+
+  return data
 }

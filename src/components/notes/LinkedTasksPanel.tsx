@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
-import { cn } from '@/lib/utils'
+import { cn, linkifyText } from '@/lib/utils'
 import { getLinkedTasks, unlinkTaskFromNote, type LinkedTask } from '@/lib/notes/taskLinks'
 
 interface LinkedTasksPanelProps {
@@ -196,7 +196,7 @@ export function LinkedTasksPanel({
                         'text-sm font-medium',
                         task.completed ? 'text-slate-400 line-through' : 'text-slate-700'
                       )}>
-                        {task.title}
+                        {linkifyText(task.title)}
                       </p>
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         {/* Priority */}

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useAuthStore } from '@/stores/authStore'
 import { format } from 'date-fns'
+import { linkifyText } from '@/lib/utils'
 import { isDemoAccount, demoDashboardData } from '@/lib/demo'
 import { fetchTodosForDate } from '@/lib/taskCategoryService'
 import { fetchJournalEntry } from '@/lib/journalService'
@@ -338,7 +339,7 @@ export default function DashboardPage() {
                       <p className={`text-sm font-medium leading-tight ${
                         task.completed ? 'text-slate-500 line-through' : 'text-slate-900 group-hover:text-cyan-600 transition-colors'
                       }`}>
-                        {task.title}
+                        {linkifyText(task.title)}
                       </p>
                       <div className="flex items-center gap-2 mt-1.5">
                         {!task.completed && task.priority && (
