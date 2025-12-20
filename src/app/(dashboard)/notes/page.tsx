@@ -1237,6 +1237,56 @@ function NotesPageContent() {
               </footer>
             </div>
           </article>
+        ) : sortedNotes.length > 0 ? (
+          /* Notes List View - when folder is selected but no note is open */
+          <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="max-w-5xl mx-auto">
+              {/* Folder Header */}
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">
+                  {currentFolderName}
+                </h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  {sortedNotes.length} {sortedNotes.length === 1 ? 'note' : 'notes'}
+                </p>
+              </div>
+
+              {/* Notes Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {sortedNotes.map((note) => (
+                  <button
+                    key={note.id}
+                    onClick={() => setSelectedNote(note)}
+                    className="text-left p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-cyan-300 dark:hover:border-cyan-600 hover:shadow-md transition-all group"
+                  >
+                    {/* Pin indicator */}
+                    {note.is_pinned && (
+                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 mb-2">
+                        <span className="material-symbols-outlined text-[14px]">push_pin</span>
+                        Pinned
+                      </span>
+                    )}
+
+                    {/* Title */}
+                    <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                      {note.title || 'Untitled Note'}
+                    </h3>
+
+                    {/* Preview */}
+                    <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-3 mb-3">
+                      {note.content_text || 'No content'}
+                    </p>
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+                      <span>{format(new Date(note.updated_at), 'MMM d, yyyy')}</span>
+                      <span>{note.word_count || 0} words</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         ) : (
           <NotesEmptyState onCreateNote={handleCreateNote} isArchive={showArchived} />
         )}
