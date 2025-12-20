@@ -28,6 +28,7 @@ interface Task {
   title: string
   completed: boolean
   priority: 'low' | 'medium' | 'high'
+  dueDate?: string
   dueTime?: string
   category?: string
   category_id?: string | null
@@ -41,6 +42,7 @@ const todoToTask = (todo: Todo): Task => ({
   title: todo.title,
   completed: todo.completed,
   priority: todo.priority,
+  dueDate: todo.due_date || undefined,
   dueTime: todo.due_time || undefined,
   category: todo.category || undefined,
   category_id: todo.category_id,
@@ -58,6 +60,9 @@ export default function TodayPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [newTaskTitle, setNewTaskTitle] = useState('')
   const [newTaskCategoryId, setNewTaskCategoryId] = useState<string | null>(null)
+  const [newTaskDueDate, setNewTaskDueDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
+  const [newTaskDueTime, setNewTaskDueTime] = useState<string>('')
+  const [showDatePicker, setShowDatePicker] = useState(false)
   const [activeTab, setActiveTab] = useState<'todo' | 'completed' | 'high'>('todo')
   const [greeting, setGreeting] = useState('Good Morning')
   const [isLoading, setIsLoading] = useState(true)
@@ -73,6 +78,7 @@ export default function TodayPage() {
   const [newCategoryIsRecurring, setNewCategoryIsRecurring] = useState(false)
 
   const categoryModalRef = useRef<HTMLDivElement>(null)
+  const datePickerRef = useRef<HTMLDivElement>(null)
   const starterCategoriesCreated = useRef(false)
 
   const today = new Date()
@@ -209,12 +215,16 @@ export default function TodayPage() {
         const result = await createTodo({
           title: newTaskTitle,
           priority: 'medium',
-          due_date: dateStr,
+          due_date: newTaskDueDate,
+          due_time: newTaskDueTime || null,
           category_id: newTaskCategoryId,
         })
         if (result) {
           await loadData() // Reload to get updated categories
           setNewTaskTitle('')
+          // Reset to today after creating
+          setNewTaskDueDate(format(new Date(), 'yyyy-MM-dd'))
+          setNewTaskDueTime('')
         }
       } catch (error) {
         console.error('Error creating todo:', error)
@@ -276,7 +286,8 @@ export default function TodayPage() {
         notes: updates.notes,
         category: updates.category,
         recurrence: updates.recurrence,
-        due_time: updates.dueTime || null,
+        due_date: updates.dueDate || undefined,
+        due_time: updates.dueTime !== undefined ? (updates.dueTime || null) : undefined,
       })
     } catch (error) {
       console.error('Error updating todo:', error)
@@ -394,6 +405,46 @@ export default function TodayPage() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showCategoryModal])
+
+  // Close date picker on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false)
+      }
+    }
+    if (showDatePicker) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showDatePicker])
+
+  // Helper to format date for display
+  const formatDateForDisplay = (dateStr: string) => {
+    const date = new Date(dateStr + 'T00:00:00')
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+
+    if (dateStr === format(today, 'yyyy-MM-dd')) return 'Today'
+    if (dateStr === format(tomorrow, 'yyyy-MM-dd')) return 'Tomorrow'
+    return format(date, 'MMM d')
+  }
+
+  // Quick date options
+  const getQuickDateOptions = () => {
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const nextWeek = new Date(today)
+    nextWeek.setDate(nextWeek.getDate() + 7)
+
+    return [
+      { label: 'Today', value: format(today, 'yyyy-MM-dd') },
+      { label: 'Tomorrow', value: format(tomorrow, 'yyyy-MM-dd') },
+      { label: 'Next Week', value: format(nextWeek, 'yyyy-MM-dd') },
+    ]
+  }
 
   const getPriorityStyles = (priority: string) => {
     switch (priority) {
@@ -527,7 +578,7 @@ export default function TodayPage() {
                 <span className="material-symbols-outlined text-2xl">add_circle</span>
               </div>
               <input
-                className="block w-full py-5 pl-14 pr-48 text-lg font-medium bg-transparent border border-transparent rounded-2xl focus:ring-2 focus:ring-cyan-200 focus:bg-white placeholder:text-slate-400 transition-all text-slate-800 outline-none disabled:opacity-50"
+                className="block w-full py-5 pl-14 pr-[340px] text-lg font-medium bg-transparent border border-transparent rounded-2xl focus:ring-2 focus:ring-cyan-200 focus:bg-white placeholder:text-slate-400 transition-all text-slate-800 outline-none disabled:opacity-50"
                 placeholder="Add a new task..."
                 type="text"
                 value={newTaskTitle}
@@ -536,6 +587,77 @@ export default function TodayPage() {
                 disabled={isSaving}
               />
               <div className="absolute inset-y-0 right-0 flex items-center pr-4 gap-2">
+                {/* Date picker for new task */}
+                <div className="relative" ref={datePickerRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowDatePicker(!showDatePicker)}
+                    className={cn(
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                      newTaskDueDate === format(new Date(), 'yyyy-MM-dd')
+                        ? "bg-cyan-50 text-cyan-600 hover:bg-cyan-100"
+                        : "bg-purple-50 text-purple-600 hover:bg-purple-100"
+                    )}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">calendar_today</span>
+                    {formatDateForDisplay(newTaskDueDate)}
+                  </button>
+
+                  {/* Date picker dropdown */}
+                  {showDatePicker && (
+                    <div className="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 min-w-[200px]">
+                      {/* Quick options */}
+                      <div className="flex flex-col gap-1 mb-3">
+                        {getQuickDateOptions().map(option => (
+                          <button
+                            key={option.value}
+                            onClick={() => {
+                              setNewTaskDueDate(option.value)
+                              setShowDatePicker(false)
+                            }}
+                            className={cn(
+                              "text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors",
+                              newTaskDueDate === option.value
+                                ? "bg-cyan-50 text-cyan-600"
+                                : "hover:bg-slate-50 text-slate-700"
+                            )}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Divider */}
+                      <div className="border-t border-slate-100 my-2"></div>
+
+                      {/* Custom date input */}
+                      <div className="flex flex-col gap-2">
+                        <label className="text-xs font-bold text-slate-400 uppercase">Custom Date</label>
+                        <input
+                          type="date"
+                          value={newTaskDueDate}
+                          onChange={(e) => {
+                            setNewTaskDueDate(e.target.value)
+                            setShowDatePicker(false)
+                          }}
+                          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-200 outline-none"
+                        />
+                      </div>
+
+                      {/* Time input */}
+                      <div className="flex flex-col gap-2 mt-3">
+                        <label className="text-xs font-bold text-slate-400 uppercase">Time (Optional)</label>
+                        <input
+                          type="time"
+                          value={newTaskDueTime}
+                          onChange={(e) => setNewTaskDueTime(e.target.value)}
+                          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-200 outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Category selector for new task */}
                 <select
                   value={newTaskCategoryId || ''}
@@ -864,6 +986,61 @@ export default function TodayPage() {
                         {p === 'medium' ? 'Med' : p}
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                {/* Due Date */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Due Date</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={selectedTask.dueDate || ''}
+                      onChange={(e) => handleUpdateTask(selectedTask.id, { dueDate: e.target.value })}
+                      className="flex-1 px-4 py-3 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 hover:border-cyan-300 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-cyan-200 appearance-none cursor-pointer shadow-sm transition-all outline-none"
+                      disabled={isDemo}
+                    />
+                  </div>
+                  {/* Quick date buttons */}
+                  <div className="flex gap-2 flex-wrap">
+                    {getQuickDateOptions().map(option => (
+                      <button
+                        key={option.value}
+                        onClick={() => handleUpdateTask(selectedTask.id, { dueDate: option.value })}
+                        disabled={isDemo}
+                        className={cn(
+                          "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                          selectedTask.dueDate === option.value
+                            ? "bg-cyan-100 text-cyan-700"
+                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Due Time */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Due Time (Optional)</label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="time"
+                      value={selectedTask.dueTime || ''}
+                      onChange={(e) => handleUpdateTask(selectedTask.id, { dueTime: e.target.value })}
+                      className="flex-1 px-4 py-3 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 hover:border-cyan-300 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-cyan-200 cursor-pointer shadow-sm transition-all outline-none"
+                      disabled={isDemo}
+                    />
+                    {selectedTask.dueTime && (
+                      <button
+                        onClick={() => handleUpdateTask(selectedTask.id, { dueTime: '' })}
+                        className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
+                        disabled={isDemo}
+                      >
+                        <span className="material-symbols-outlined text-[18px]">close</span>
+                      </button>
+                    )}
                   </div>
                 </div>
 
