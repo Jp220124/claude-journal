@@ -298,9 +298,11 @@ function NotesPageContent() {
       setFolderTree(demoFolderTree)
       setRootNoteCount(demoNotes.filter(n => !n.is_archived).length)
       setArchivedNoteCount(0)
-      if (!selectedNoteRef.current) {
+      // Only auto-select on initial load (not when navigating folders)
+      if (!selectedNoteRef.current && !initialLoadDone.current) {
         setSelectedNote(demoNotes[0])
       }
+      initialLoadDone.current = true
       setIsLoading(false)
       return
     }
@@ -333,8 +335,8 @@ function NotesPageContent() {
       setRootNoteCount(rootCount)
       setArchivedNoteCount(archiveCount)
 
-      // Select first note only on initial load or if explicitly forcing reload
-      if (notesData.length > 0 && !selectedNoteRef.current) {
+      // Select first note ONLY on initial load (not when navigating folders)
+      if (notesData.length > 0 && !selectedNoteRef.current && !initialLoadDone.current) {
         setSelectedNote(notesData[0])
       }
       initialLoadDone.current = true
@@ -977,7 +979,15 @@ function NotesPageContent() {
               rootNoteCount={rootNoteCount}
               archivedNoteCount={archivedNoteCount}
               showArchive={showArchived}
-              onFolderSelect={(folderId) => { setSelectedFolderId(folderId); setShowArchived(false); }}
+              onFolderSelect={(folderId) => {
+                setSelectedFolderId(folderId);
+                setShowArchived(false);
+                setSelectedNote(null);  // Clear selection to show folder contents
+                // Expand the folder to show subfolders
+                if (folderId) {
+                  setExpandedFolderIds(prev => new Set([...prev, folderId]));
+                }
+              }}
               onFolderExpand={handleFolderExpand}
               onFolderCollapse={handleFolderCollapse}
               onCreateFolder={handleCreateSubfolder}
