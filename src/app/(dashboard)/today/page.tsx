@@ -826,7 +826,7 @@ export default function TodayPage() {
                                         ? 'text-slate-500 line-through'
                                         : 'text-slate-700 group-hover:text-slate-900'
                                     }`}>
-                                      {task.title}
+                                      {linkifyText(task.title)}
                                     </h3>
                                     {!task.completed && (
                                       <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
