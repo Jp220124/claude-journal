@@ -6,6 +6,11 @@ import {
   FileShare,
   FileShareCreate,
   SharedFileInfo,
+  FileFolder,
+  FileFolderInsert,
+  FileFolderUpdate,
+  FolderTreeNode,
+  BreadcrumbSegment,
   isFileTypeAllowed,
   sanitizeFilename,
   MAX_FILE_SIZE,
@@ -41,7 +46,7 @@ function generateShareToken(): string {
  */
 export async function uploadFile(
   file: File,
-  options?: { folder?: string; description?: string; isPublic?: boolean }
+  options?: { folder?: string; folderId?: string | null; description?: string; isPublic?: boolean }
 ): Promise<FileRecord | null> {
   const supabase = createClient()
 
@@ -91,6 +96,7 @@ export async function uploadFile(
     storage_path: storagePath,
     is_public: options?.isPublic ?? false,
     folder: options?.folder ?? 'root',
+    folder_id: options?.folderId ?? null,
     description: options?.description ?? null,
   }
 
@@ -482,4 +488,384 @@ export function getPublicUrl(storagePath: string): string {
   const supabase = createClient()
   const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath)
   return data.publicUrl
+}
+
+// =============================================================================
+// FILE FOLDER OPERATIONS
+// =============================================================================
+
+/**
+ * Fetch all file folders for the current user (flat list)
+ */
+export async function fetchFileFolders(): Promise<FileFolder[]> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('file_folders')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('order_index', { ascending: true })
+
+  if (error) {
+    console.error('Error fetching file folders:', error)
+    return []
+  }
+
+  return data || []
+}
+
+/**
+ * Build folder tree from flat list
+ */
+export function buildFolderTree(
+  folders: FileFolder[],
+  fileCounts: Map<string | null, number>
+): FolderTreeNode[] {
+  const folderMap = new Map<string, FolderTreeNode>()
+
+  // Initialize all folders as nodes
+  folders.forEach(folder => {
+    folderMap.set(folder.id, {
+      ...folder,
+      children: [],
+      file_count: fileCounts.get(folder.id) || 0,
+      depth: 0,
+    })
+  })
+
+  const roots: FolderTreeNode[] = []
+
+  // Build tree structure
+  folders.forEach(folder => {
+    const node = folderMap.get(folder.id)!
+    if (folder.parent_folder_id === null) {
+      roots.push(node)
+    } else {
+      const parent = folderMap.get(folder.parent_folder_id)
+      if (parent) {
+        parent.children.push(node)
+        node.depth = parent.depth + 1
+      } else {
+        // Orphan folder, treat as root
+        roots.push(node)
+      }
+    }
+  })
+
+  // Sort children by order_index
+  const sortChildren = (nodes: FolderTreeNode[]) => {
+    nodes.sort((a, b) => a.order_index - b.order_index)
+    nodes.forEach(node => sortChildren(node.children))
+  }
+  sortChildren(roots)
+
+  return roots
+}
+
+/**
+ * Fetch folder tree with file counts
+ */
+export async function fetchFolderTree(): Promise<FolderTreeNode[]> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  // Fetch folders and file counts in parallel
+  const [foldersRes, filesRes] = await Promise.all([
+    supabase
+      .from('file_folders')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('order_index'),
+    supabase
+      .from('files')
+      .select('folder_id')
+      .eq('user_id', user.id),
+  ])
+
+  if (foldersRes.error) {
+    console.error('Error fetching folders:', foldersRes.error)
+    return []
+  }
+
+  // Count files per folder
+  const fileCounts = new Map<string | null, number>()
+  filesRes.data?.forEach(file => {
+    const folderId = file.folder_id
+    fileCounts.set(folderId, (fileCounts.get(folderId) || 0) + 1)
+  })
+
+  return buildFolderTree(foldersRes.data || [], fileCounts)
+}
+
+/**
+ * Get file count for root (files with no folder)
+ */
+export async function getRootFileCount(): Promise<number> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return 0
+
+  const { count, error } = await supabase
+    .from('files')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .is('folder_id', null)
+
+  if (error) {
+    console.error('Error getting root file count:', error)
+    return 0
+  }
+
+  return count || 0
+}
+
+/**
+ * Create a new file folder
+ */
+export async function createFileFolder(
+  folder: FileFolderInsert
+): Promise<FileFolder | null> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  // Get max order_index for the parent level
+  const { data: maxData } = await supabase
+    .from('file_folders')
+    .select('order_index')
+    .eq('user_id', user.id)
+    .is('parent_folder_id', folder.parent_folder_id ?? null)
+    .order('order_index', { ascending: false })
+    .limit(1)
+
+  const newOrderIndex = ((maxData?.[0]?.order_index) ?? -1) + 1
+
+  const { data, error } = await supabase
+    .from('file_folders')
+    .insert({
+      user_id: user.id,
+      name: folder.name.trim(),
+      parent_folder_id: folder.parent_folder_id ?? null,
+      order_index: folder.order_index ?? newOrderIndex,
+    })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error creating folder:', error)
+    return null
+  }
+
+  return data
+}
+
+/**
+ * Update file folder (rename or move)
+ */
+export async function updateFileFolder(
+  folderId: string,
+  updates: FileFolderUpdate
+): Promise<FileFolder | null> {
+  const supabase = createClient()
+
+  const updateData: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if (updates.name !== undefined) {
+    updateData.name = updates.name.trim()
+  }
+  if (updates.parent_folder_id !== undefined) {
+    updateData.parent_folder_id = updates.parent_folder_id
+  }
+  if (updates.order_index !== undefined) {
+    updateData.order_index = updates.order_index
+  }
+
+  const { data, error } = await supabase
+    .from('file_folders')
+    .update(updateData)
+    .eq('id', folderId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('Error updating folder:', error)
+    return null
+  }
+
+  return data
+}
+
+/**
+ * Delete file folder and optionally its contents
+ */
+export async function deleteFileFolder(
+  folderId: string,
+  deleteContents: boolean = false
+): Promise<boolean> {
+  const supabase = createClient()
+
+  if (deleteContents) {
+    // Get all descendant folder IDs using the SQL function
+    const { data: descendants, error: descError } = await supabase
+      .rpc('get_folder_descendants', { p_folder_id: folderId })
+
+    if (descError) {
+      console.error('Error getting descendants:', descError)
+      return false
+    }
+
+    if (descendants && descendants.length > 0) {
+      const folderIds = descendants.map((d: { id: string }) => d.id)
+
+      // Get all files in these folders to delete from storage
+      const { data: files } = await supabase
+        .from('files')
+        .select('id, storage_path, thumbnail_path')
+        .in('folder_id', folderIds)
+
+      if (files && files.length > 0) {
+        // Delete from storage
+        const pathsToDelete = files
+          .flatMap(f => [f.storage_path, f.thumbnail_path])
+          .filter(Boolean) as string[]
+
+        if (pathsToDelete.length > 0) {
+          await supabase.storage.from(STORAGE_BUCKET).remove(pathsToDelete)
+        }
+
+        // Delete file records
+        await supabase.from('files').delete().in('folder_id', folderIds)
+      }
+    }
+  } else {
+    // Move files to root (null folder)
+    await supabase
+      .from('files')
+      .update({ folder_id: null })
+      .eq('folder_id', folderId)
+
+    // Move subfolders to parent of deleted folder
+    const { data: folder } = await supabase
+      .from('file_folders')
+      .select('parent_folder_id')
+      .eq('id', folderId)
+      .single()
+
+    if (folder) {
+      await supabase
+        .from('file_folders')
+        .update({ parent_folder_id: folder.parent_folder_id })
+        .eq('parent_folder_id', folderId)
+    }
+  }
+
+  // Delete the folder itself (cascade will delete child folders if deleteContents)
+  const { error } = await supabase
+    .from('file_folders')
+    .delete()
+    .eq('id', folderId)
+
+  if (error) {
+    console.error('Error deleting folder:', error)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Get folder breadcrumb path
+ */
+export async function getFolderPath(
+  folderId: string
+): Promise<BreadcrumbSegment[]> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .rpc('get_folder_path', { p_folder_id: folderId })
+
+  if (error) {
+    console.error('Error getting folder path:', error)
+    return []
+  }
+
+  return (data || []).map((item: { id: string; name: string }) => ({
+    id: item.id,
+    name: item.name,
+  }))
+}
+
+/**
+ * Move file to folder
+ */
+export async function moveFileToFolder(
+  fileId: string,
+  folderId: string | null
+): Promise<FileRecord | null> {
+  return updateFile(fileId, { folder_id: folderId })
+}
+
+/**
+ * Move multiple files to folder
+ */
+export async function moveFilesToFolder(
+  fileIds: string[],
+  folderId: string | null
+): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('files')
+    .update({
+      folder_id: folderId,
+      updated_at: new Date().toISOString(),
+    })
+    .in('id', fileIds)
+
+  if (error) {
+    console.error('Error moving files:', error)
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Fetch files by folder_id (new method)
+ */
+export async function fetchFilesByFolderId(folderId: string | null): Promise<FileRecord[]> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  let query = supabase
+    .from('files')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false })
+
+  if (folderId === null) {
+    query = query.is('folder_id', null)
+  } else {
+    query = query.eq('folder_id', folderId)
+  }
+
+  const { data, error } = await query
+
+  if (error) {
+    console.error('Error fetching files by folder:', error)
+    return []
+  }
+
+  return data || []
 }

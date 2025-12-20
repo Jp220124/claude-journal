@@ -11,6 +11,7 @@ import {
 
 interface UseFileUploadOptions {
   folder?: string
+  folderId?: string | null
   onSuccess?: (file: FileRecord) => void
   onError?: (error: string, file: File) => void
 }
@@ -80,6 +81,7 @@ export function useFileUpload(options: UseFileUploadOptions = {}): UseFileUpload
         // Perform upload
         const result = await uploadFile(upload.file, {
           folder: options.folder,
+          folderId: options.folderId,
         })
 
         clearInterval(progressInterval)

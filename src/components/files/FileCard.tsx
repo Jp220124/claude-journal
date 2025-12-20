@@ -15,6 +15,7 @@ import {
   Music,
   FileText,
   File,
+  FolderInput,
 } from 'lucide-react'
 
 interface FileCardProps {
@@ -23,6 +24,7 @@ interface FileCardProps {
   onShare?: (file: FileRecord) => void
   onDelete?: (file: FileRecord) => void
   onDownload?: (file: FileRecord) => void
+  onMove?: (file: FileRecord) => void
 }
 
 export function FileCard({
@@ -31,6 +33,7 @@ export function FileCard({
   onShare,
   onDelete,
   onDownload,
+  onMove,
 }: FileCardProps) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
   const [showMenu, setShowMenu] = useState(false)
@@ -66,13 +69,23 @@ export function FileCard({
     onDownload?.(file)
   }
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('application/json', JSON.stringify({
+      type: 'file',
+      id: file.id,
+    }))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
   return (
     <div
       className={cn(
         'group relative rounded-lg border border-[var(--border)]',
         'bg-[var(--card)] overflow-hidden',
-        'hover:border-[var(--primary)] transition-colors'
+        'hover:border-[var(--primary)] transition-colors cursor-grab active:cursor-grabbing'
       )}
+      draggable
+      onDragStart={handleDragStart}
     >
       {/* Thumbnail / Preview Area */}
       <div
@@ -172,6 +185,18 @@ export function FileCard({
                     <Share2 className="h-4 w-4" />
                     Share
                   </button>
+                  {onMove && (
+                    <button
+                      onClick={() => {
+                        setShowMenu(false)
+                        onMove(file)
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-[var(--muted)] flex items-center gap-2"
+                    >
+                      <FolderInput className="h-4 w-4" />
+                      Move to Folder
+                    </button>
+                  )}
                   <hr className="my-1 border-[var(--border)]" />
                   <button
                     onClick={() => {

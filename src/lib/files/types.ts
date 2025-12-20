@@ -11,10 +11,58 @@ export interface FileRecord {
   thumbnail_path: string | null
   is_public: boolean
   folder: string
+  folder_id: string | null  // Reference to file_folders table
   description: string | null
   download_count: number
   created_at: string
   updated_at: string
+}
+
+// =============================================================================
+// FILE FOLDER TYPES
+// =============================================================================
+
+export interface FileFolder {
+  id: string
+  user_id: string
+  name: string
+  parent_folder_id: string | null
+  order_index: number
+  created_at: string
+  updated_at: string
+}
+
+export interface FileFolderInsert {
+  name: string
+  parent_folder_id?: string | null
+  order_index?: number
+}
+
+export interface FileFolderUpdate {
+  name?: string
+  parent_folder_id?: string | null
+  order_index?: number
+}
+
+// Folder tree node for hierarchical display
+export interface FolderTreeNode extends FileFolder {
+  children: FolderTreeNode[]
+  file_count: number
+  depth: number
+  isExpanded?: boolean
+}
+
+// Breadcrumb segment for folder path navigation
+export interface BreadcrumbSegment {
+  id: string
+  name: string
+}
+
+// Drag item type for drag-and-drop
+export interface DragItem {
+  type: 'file' | 'folder'
+  id: string
+  name: string
 }
 
 export interface FileInsert {
@@ -26,6 +74,7 @@ export interface FileInsert {
   thumbnail_path?: string | null
   is_public?: boolean
   folder?: string
+  folder_id?: string | null
   description?: string | null
 }
 
@@ -33,6 +82,7 @@ export interface FileUpdate {
   name?: string
   is_public?: boolean
   folder?: string
+  folder_id?: string | null
   description?: string | null
 }
 
