@@ -33,7 +33,7 @@ interface ResearchQuota {
   total_jobs_all_time: number
 }
 
-interface CategoryAutomation {
+export interface CategoryAutomation {
   id: string
   user_id: string
   category_id: string

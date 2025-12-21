@@ -21,7 +21,15 @@ import {
   deleteTodo,
   moveTodoToCategory,
 } from '@/lib/taskCategoryService'
-import { triggerResearch, getResearchStatus } from '@/lib/researchService'
+import {
+  triggerResearch,
+  getResearchStatus,
+  getCategoryAutomations,
+  createCategoryAutomation,
+  updateCategoryAutomation,
+  deleteCategoryAutomation,
+  type CategoryAutomation
+} from '@/lib/researchService'
 import type { TaskCategory, Todo, TaskCategoryWithTodos } from '@/types/database'
 
 interface Task {
@@ -77,6 +85,14 @@ export default function TodayPage() {
   const [newCategoryIcon, setNewCategoryIcon] = useState('folder')
   const [newCategoryColor, setNewCategoryColor] = useState('#6366f1')
   const [newCategoryIsRecurring, setNewCategoryIsRecurring] = useState(false)
+
+  // Category automation state
+  const [categoryAutomations, setCategoryAutomations] = useState<Record<string, CategoryAutomation>>({})
+  const [enableAutomation, setEnableAutomation] = useState(false)
+  const [automationResearchDepth, setAutomationResearchDepth] = useState<'quick' | 'medium' | 'thorough'>('medium')
+  const [automationAskClarification, setAutomationAskClarification] = useState(false)
+  const [automationMaxSources, setAutomationMaxSources] = useState(5)
+  const [existingAutomationId, setExistingAutomationId] = useState<string | null>(null)
 
   // Research state
   const [researchEnabled, setResearchEnabled] = useState(false)
@@ -181,18 +197,29 @@ export default function TodayPage() {
     loadData()
   }, [loadData])
 
-  // Check if research is enabled
+  // Check if research is enabled and load category automations
   useEffect(() => {
-    async function checkResearch() {
+    async function checkResearchAndLoadAutomations() {
       try {
         const status = await getResearchStatus()
         setResearchEnabled(status.enabled)
+
+        // Load category automations if research is enabled
+        if (status.enabled) {
+          const automations = await getCategoryAutomations()
+          // Create a map of category_id -> automation for easy lookup
+          const automationMap: Record<string, CategoryAutomation> = {}
+          automations.forEach(a => {
+            automationMap[a.category_id] = a
+          })
+          setCategoryAutomations(automationMap)
+        }
       } catch (err) {
         console.error('Error checking research status:', err)
       }
     }
     if (!isDemo) {
-      checkResearch()
+      checkResearchAndLoadAutomations()
     }
   }, [isDemo])
 
@@ -378,6 +405,8 @@ export default function TodayPage() {
 
     setIsSaving(true)
     try {
+      let categoryId: string
+
       if (editingCategory) {
         await updateTaskCategory(editingCategory.id, {
           name: newCategoryName,
@@ -385,14 +414,52 @@ export default function TodayPage() {
           color: newCategoryColor,
           is_recurring: newCategoryIsRecurring,
         })
+        categoryId = editingCategory.id
       } else {
-        await createTaskCategory({
+        const newCategory = await createTaskCategory({
           name: newCategoryName,
           icon: newCategoryIcon,
           color: newCategoryColor,
           is_recurring: newCategoryIsRecurring,
         })
+        if (!newCategory) {
+          throw new Error('Failed to create category')
+        }
+        categoryId = newCategory.id
       }
+
+      // Handle automation settings if research is enabled
+      if (researchEnabled) {
+        if (enableAutomation) {
+          // Create or update automation
+          if (existingAutomationId) {
+            const updated = await updateCategoryAutomation(existingAutomationId, {
+              research_depth: automationResearchDepth,
+              ask_clarification: automationAskClarification,
+              max_sources: automationMaxSources,
+              is_active: true,
+            })
+            // Update local state
+            setCategoryAutomations(prev => ({ ...prev, [categoryId]: updated }))
+          } else {
+            const created = await createCategoryAutomation({
+              categoryId,
+              researchDepth: automationResearchDepth,
+              askClarification: automationAskClarification,
+              maxSources: automationMaxSources,
+            })
+            // Update local state
+            setCategoryAutomations(prev => ({ ...prev, [categoryId]: created }))
+          }
+        } else if (existingAutomationId) {
+          // Disable automation (set is_active to false)
+          const updated = await updateCategoryAutomation(existingAutomationId, {
+            is_active: false,
+          })
+          setCategoryAutomations(prev => ({ ...prev, [categoryId]: updated }))
+        }
+      }
+
       await loadData()
       closeCategoryModal()
     } catch (error) {
@@ -420,12 +487,34 @@ export default function TodayPage() {
       setNewCategoryIcon(category.icon)
       setNewCategoryColor(category.color)
       setNewCategoryIsRecurring(category.is_recurring)
+
+      // Load existing automation settings for this category
+      const existingAutomation = categoryAutomations[category.id]
+      if (existingAutomation) {
+        setEnableAutomation(existingAutomation.is_active)
+        setAutomationResearchDepth(existingAutomation.research_depth as 'quick' | 'medium' | 'thorough')
+        setAutomationAskClarification(existingAutomation.ask_clarification)
+        setAutomationMaxSources(existingAutomation.max_sources)
+        setExistingAutomationId(existingAutomation.id)
+      } else {
+        setEnableAutomation(false)
+        setAutomationResearchDepth('medium')
+        setAutomationAskClarification(false)
+        setAutomationMaxSources(5)
+        setExistingAutomationId(null)
+      }
     } else {
       setEditingCategory(null)
       setNewCategoryName('')
       setNewCategoryIcon('folder')
       setNewCategoryColor('#6366f1')
       setNewCategoryIsRecurring(false)
+      // Reset automation settings for new category
+      setEnableAutomation(false)
+      setAutomationResearchDepth('medium')
+      setAutomationAskClarification(false)
+      setAutomationMaxSources(5)
+      setExistingAutomationId(null)
     }
     setShowCategoryModal(true)
   }
@@ -434,6 +523,12 @@ export default function TodayPage() {
     setShowCategoryModal(false)
     setEditingCategory(null)
     setNewCategoryName('')
+    // Reset automation settings
+    setEnableAutomation(false)
+    setAutomationResearchDepth('medium')
+    setAutomationAskClarification(false)
+    setAutomationMaxSources(5)
+    setExistingAutomationId(null)
   }
 
   // Close modal on outside click
@@ -1247,6 +1342,90 @@ export default function TodayPage() {
                   Daily recurring tasks (tasks repeat every day)
                 </label>
               </div>
+
+              {/* Research Automation - only show if research is enabled */}
+              {researchEnabled && (
+                <div className="border-t border-slate-200 pt-4 mt-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="material-symbols-outlined text-cyan-600 text-[20px]">science</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                      Research Automation
+                    </span>
+                  </div>
+
+                  {/* Enable Automation Toggle */}
+                  <div className="flex items-center gap-3 mb-4">
+                    <input
+                      type="checkbox"
+                      id="enableAutomation"
+                      checked={enableAutomation}
+                      onChange={(e) => setEnableAutomation(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                    />
+                    <label htmlFor="enableAutomation" className="text-sm text-slate-700">
+                      Auto-research new tasks in this category
+                    </label>
+                  </div>
+
+                  {/* Automation Settings - only show if enabled */}
+                  {enableAutomation && (
+                    <div className="space-y-3 pl-7 border-l-2 border-cyan-100">
+                      {/* Research Depth */}
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                          Research Depth
+                        </label>
+                        <div className="flex gap-2">
+                          {(['quick', 'medium', 'thorough'] as const).map(depth => (
+                            <button
+                              key={depth}
+                              type="button"
+                              onClick={() => setAutomationResearchDepth(depth)}
+                              className={cn(
+                                'px-3 py-1.5 text-xs rounded-lg font-medium transition-colors capitalize',
+                                automationResearchDepth === depth
+                                  ? 'bg-cyan-100 text-cyan-700'
+                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                              )}
+                            >
+                              {depth}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Max Sources */}
+                      <div>
+                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                          Max Sources: {automationMaxSources}
+                        </label>
+                        <input
+                          type="range"
+                          min="3"
+                          max="10"
+                          value={automationMaxSources}
+                          onChange={(e) => setAutomationMaxSources(Number(e.target.value))}
+                          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-cyan-600"
+                        />
+                      </div>
+
+                      {/* Ask Clarification */}
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="askClarification"
+                          checked={automationAskClarification}
+                          onChange={(e) => setAutomationAskClarification(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                        />
+                        <label htmlFor="askClarification" className="text-xs text-slate-600">
+                          Ask for clarification before researching
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Actions */}
