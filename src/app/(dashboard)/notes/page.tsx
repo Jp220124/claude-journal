@@ -47,6 +47,7 @@ import {
   NotesErrorBoundary,
   NotesEmptyState,
   ResearchSourcesPanel,
+  ResearchNoteRenderer,
 } from '@/components/notes'
 import { NoteFolderTree } from '@/components/notes/NoteFolderTree'
 import { ShareNoteDialog } from '@/components/notes/ShareNoteDialog'
@@ -259,6 +260,9 @@ function NotesPageContent() {
   const [showTaskLinker, setShowTaskLinker] = useState(false)
   const [linkedTaskIds, setLinkedTaskIds] = useState<string[]>([])
   const [linkedTasksKey, setLinkedTasksKey] = useState(0)
+
+  // Research note view mode (view = beautiful render, edit = TipTap editor)
+  const [researchViewMode, setResearchViewMode] = useState<'view' | 'edit'>('view')
 
   // Folder management state
   const [showFolderModal, setShowFolderModal] = useState(false)
@@ -502,10 +506,11 @@ function NotesPageContent() {
     setLinkedTasksKey(prev => prev + 1)
   }
 
-  // Reset linked task IDs when note changes
+  // Reset linked task IDs and view mode when note changes
   useEffect(() => {
     setLinkedTaskIds([])
     setLinkedTasksKey(prev => prev + 1)
+    setResearchViewMode('view') // Always start in view mode for research notes
   }, [selectedNote?.id])
 
   // Stable callback for selecting notes - prevents re-renders of memoized components
@@ -1217,24 +1222,106 @@ function NotesPageContent() {
                 </div>
               </div>
 
-              {/* TipTap Rich Text Editor */}
+              {/* Content Area */}
               <div className="flex-1">
-                <NotesEditor
-                  content={selectedNote.content || ''}
-                  onUpdate={({ json, text }) => {
-                    const wordCount = text.trim().split(/\s+/).filter(Boolean).length
-                    handleUpdateNote(selectedNote.id, {
-                      content: json as Record<string, unknown>,
-                      content_text: text,
-                      word_count: wordCount,
-                    })
-                  }}
-                  placeholder="Start writing..."
-                  onImageUpload={async (file) => {
-                    if (isDemo) return null
-                    return await uploadNoteImage(file, selectedNote.id)
-                  }}
-                />
+                {/* Research Note - Special Beautiful Renderer */}
+                {selectedNote.source_type === 'research' ? (
+                  <>
+                    {/* View/Edit Toggle for Research Notes */}
+                    <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setResearchViewMode('view')}
+                          className={cn(
+                            'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                            researchViewMode === 'view'
+                              ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
+                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          )}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[16px]">auto_awesome</span>
+                            View
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => setResearchViewMode('edit')}
+                          className={cn(
+                            'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
+                            researchViewMode === 'edit'
+                              ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
+                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                          )}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <span className="material-symbols-outlined text-[16px]">edit</span>
+                            Edit
+                          </span>
+                        </button>
+                      </div>
+                      {researchViewMode === 'view' && (
+                        <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[14px]">info</span>
+                          AI-generated research brief
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Research Content */}
+                    {researchViewMode === 'view' ? (
+                      <ResearchNoteRenderer
+                        content={selectedNote.content_text || ''}
+                        sources={selectedNote.sources || []}
+                        className="mb-6"
+                      />
+                    ) : (
+                      <NotesEditor
+                        content={selectedNote.content || ''}
+                        onUpdate={({ json, text }) => {
+                          const wordCount = text.trim().split(/\s+/).filter(Boolean).length
+                          handleUpdateNote(selectedNote.id, {
+                            content: json as Record<string, unknown>,
+                            content_text: text,
+                            word_count: wordCount,
+                          })
+                        }}
+                        placeholder="Start writing..."
+                        onImageUpload={async (file) => {
+                          if (isDemo) return null
+                          return await uploadNoteImage(file, selectedNote.id)
+                        }}
+                      />
+                    )}
+
+                    {/* Research Sources Panel */}
+                    {selectedNote.sources && selectedNote.sources.length > 0 && (
+                      <ResearchSourcesPanel
+                        sources={selectedNote.sources}
+                        sourceType={selectedNote.source_type}
+                        researchJobId={selectedNote.research_job_id}
+                        className="mt-6"
+                      />
+                    )}
+                  </>
+                ) : (
+                  /* Regular Note - TipTap Editor */
+                  <NotesEditor
+                    content={selectedNote.content || ''}
+                    onUpdate={({ json, text }) => {
+                      const wordCount = text.trim().split(/\s+/).filter(Boolean).length
+                      handleUpdateNote(selectedNote.id, {
+                        content: json as Record<string, unknown>,
+                        content_text: text,
+                        word_count: wordCount,
+                      })
+                    }}
+                    placeholder="Start writing..."
+                    onImageUpload={async (file) => {
+                      if (isDemo) return null
+                      return await uploadNoteImage(file, selectedNote.id)
+                    }}
+                  />
+                )}
 
                 {/* Linked Tasks Panel */}
                 <LinkedTasksPanel
@@ -1243,16 +1330,6 @@ function NotesPageContent() {
                   onLinkTask={() => setShowTaskLinker(true)}
                   isDemo={isDemo}
                 />
-
-                {/* Research Sources Panel - Show for research-generated notes */}
-                {selectedNote.source_type === 'research' && selectedNote.sources && (
-                  <ResearchSourcesPanel
-                    sources={selectedNote.sources}
-                    sourceType={selectedNote.source_type}
-                    researchJobId={selectedNote.research_job_id}
-                    className="mt-6"
-                  />
-                )}
               </div>
 
               {/* Footer */}
