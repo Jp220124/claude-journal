@@ -89,7 +89,7 @@ export default function TodayPage() {
   // Category automation state
   const [categoryAutomations, setCategoryAutomations] = useState<Record<string, CategoryAutomation>>({})
   const [enableAutomation, setEnableAutomation] = useState(false)
-  const [automationResearchDepth, setAutomationResearchDepth] = useState<'quick' | 'medium' | 'thorough'>('medium')
+  const [automationResearchDepth, setAutomationResearchDepth] = useState<'quick' | 'medium' | 'deep'>('medium')
   const [automationAskClarification, setAutomationAskClarification] = useState(false)
   const [automationMaxSources, setAutomationMaxSources] = useState(5)
   const [existingAutomationId, setExistingAutomationId] = useState<string | null>(null)
@@ -492,7 +492,7 @@ export default function TodayPage() {
       const existingAutomation = categoryAutomations[category.id]
       if (existingAutomation) {
         setEnableAutomation(existingAutomation.is_active)
-        setAutomationResearchDepth(existingAutomation.research_depth as 'quick' | 'medium' | 'thorough')
+        setAutomationResearchDepth(existingAutomation.research_depth as 'quick' | 'medium' | 'deep')
         setAutomationAskClarification(existingAutomation.ask_clarification)
         setAutomationMaxSources(existingAutomation.max_sources)
         setExistingAutomationId(existingAutomation.id)
@@ -1376,7 +1376,7 @@ export default function TodayPage() {
                           Research Depth
                         </label>
                         <div className="flex gap-2">
-                          {(['quick', 'medium', 'thorough'] as const).map(depth => (
+                          {(['quick', 'medium', 'deep'] as const).map(depth => (
                             <button
                               key={depth}
                               type="button"
