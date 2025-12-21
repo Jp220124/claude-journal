@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
@@ -13,7 +13,12 @@ import {
   getResearchQuota,
   getQueueStats,
   getStatusDisplay,
+  getCategoryAutomations,
+  type CategoryAutomation,
 } from '@/lib/researchService'
+
+const ACTIVE_STATUSES = ['pending', 'understanding', 'awaiting_clarification', 'researching', 'synthesizing']
+const POLLING_INTERVAL = 5000 // 5 seconds
 
 interface ResearchJob {
   id: string
@@ -43,6 +48,7 @@ export default function ResearchPage() {
   const [quota, setQuota] = useState({ jobs_today: 0, max_jobs_per_day: 10, total_jobs_all_time: 0 })
   const [canStartNew, setCanStartNew] = useState(true)
   const [queueStats, setQueueStats] = useState<{ waiting: number; active: number; completed: number; failed: number } | null>(null)
+  const [automations, setAutomations] = useState<CategoryAutomation[]>([])
   const [error, setError] = useState<string | null>(null)
 
   // Fetch initial data
@@ -65,11 +71,12 @@ export default function ResearchPage() {
         return
       }
 
-      // Fetch jobs, quota, and stats in parallel
-      const [jobsData, quotaData, statsData] = await Promise.all([
+      // Fetch jobs, quota, stats, and automations in parallel
+      const [jobsData, quotaData, statsData, automationsData] = await Promise.all([
         getResearchJobs(),
         getResearchQuota(),
         getQueueStats(),
+        getCategoryAutomations().catch(() => []), // Gracefully handle if endpoint fails
       ])
 
       setJobs(jobsData)
@@ -78,6 +85,7 @@ export default function ResearchPage() {
       if (statsData.stats) {
         setQueueStats(statsData.stats)
       }
+      setAutomations(automationsData.filter((a: CategoryAutomation) => a.is_active))
     } catch (err) {
       console.error('Error loading research data:', err)
       setError(err instanceof Error ? err.message : 'Failed to load research data')
@@ -89,6 +97,32 @@ export default function ResearchPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Auto-poll when there are active jobs
+  const hasActiveJobs = jobs.some(j => ACTIVE_STATUSES.includes(j.status))
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    // Clear any existing interval
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+
+    // Start polling if there are active jobs
+    if (hasActiveJobs && !isDemo) {
+      pollingIntervalRef.current = setInterval(() => {
+        loadData()
+      }, POLLING_INTERVAL)
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [hasActiveJobs, isDemo, loadData])
 
   // View job details
   const viewJobDetails = async (jobId: string) => {
@@ -166,13 +200,26 @@ export default function ResearchPage() {
                 AI-powered research for your tasks
               </p>
             </div>
-            <button
-              onClick={loadData}
-              className="self-start md:self-auto flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-            >
-              <span className="material-symbols-outlined text-lg">refresh</span>
-              Refresh
-            </button>
+            <div className="flex items-center gap-3 self-start md:self-auto">
+              {/* Auto-refresh indicator */}
+              {hasActiveJobs && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-cyan-50 dark:bg-cyan-900/30 border border-cyan-200 dark:border-cyan-700 rounded-full">
+                  <div className="w-2 h-2 bg-cyan-500 rounded-full animate-pulse" />
+                  <span className="text-xs font-medium text-cyan-700 dark:text-cyan-300">Auto-refreshing</span>
+                </div>
+              )}
+              <button
+                onClick={loadData}
+                disabled={isLoading}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors",
+                  isLoading && "opacity-50 cursor-not-allowed"
+                )}
+              >
+                <span className={cn("material-symbols-outlined text-lg", isLoading && "animate-spin")}>refresh</span>
+                Refresh
+              </button>
+            </div>
           </div>
 
           {/* Error Banner */}
@@ -272,6 +319,52 @@ export default function ResearchPage() {
               </div>
             </div>
           </div>
+
+          {/* Automation Overview Section */}
+          {automations.length > 0 && (
+            <section>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+                <span className="material-symbols-outlined text-purple-500">smart_toy</span>
+                Auto-Research Categories ({automations.length})
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {automations.map(automation => (
+                  <div
+                    key={automation.id}
+                    className="bg-white dark:bg-slate-800 rounded-xl border border-purple-100 dark:border-purple-900 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate flex items-center gap-2">
+                          {automation.task_categories?.icon && (
+                            <span>{automation.task_categories.icon}</span>
+                          )}
+                          {automation.task_categories?.name || 'Unknown Category'}
+                        </h3>
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          <span className={cn(
+                            'text-xs px-2 py-0.5 rounded-full font-medium capitalize',
+                            automation.research_depth === 'quick' && 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
+                            automation.research_depth === 'medium' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300',
+                            automation.research_depth === 'deep' && 'bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300',
+                          )}>
+                            {automation.research_depth || 'medium'}
+                          </span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                            {automation.max_sources || 5} sources
+                          </span>
+                        </div>
+                      </div>
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Active" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-slate-400 mt-3">
+                Configure auto-research in the <Link href="/today" className="text-cyan-600 hover:underline">Today page</Link> by editing a category
+              </p>
+            </section>
+          )}
 
           {/* Active Jobs Section */}
           {activeJobs.length > 0 && (

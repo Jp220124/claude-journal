@@ -648,6 +648,14 @@ export interface NoteFolder {
   updated_at: string
 }
 
+// Research source reference type
+export interface ResearchSource {
+  title: string
+  url: string
+  author?: string
+  publishedDate?: string
+}
+
 export interface Note {
   id: string
   user_id: string
@@ -663,7 +671,7 @@ export interface Note {
   // Research automation fields
   research_job_id?: string | null
   source_type?: 'manual' | 'research' | 'import' | null
-  sources?: Array<{ title: string; url: string }> | null
+  sources?: ResearchSource[] | null
 }
 
 export interface NoteTag {

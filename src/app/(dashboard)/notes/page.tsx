@@ -46,6 +46,7 @@ import {
   NotesLoadingSkeleton,
   NotesErrorBoundary,
   NotesEmptyState,
+  ResearchSourcesPanel,
 } from '@/components/notes'
 import { NoteFolderTree } from '@/components/notes/NoteFolderTree'
 import { ShareNoteDialog } from '@/components/notes/ShareNoteDialog'
@@ -1242,6 +1243,16 @@ function NotesPageContent() {
                   onLinkTask={() => setShowTaskLinker(true)}
                   isDemo={isDemo}
                 />
+
+                {/* Research Sources Panel - Show for research-generated notes */}
+                {selectedNote.source_type === 'research' && selectedNote.sources && (
+                  <ResearchSourcesPanel
+                    sources={selectedNote.sources}
+                    sourceType={selectedNote.source_type}
+                    researchJobId={selectedNote.research_job_id}
+                    className="mt-6"
+                  />
+                )}
               </div>
 
               {/* Footer */}
