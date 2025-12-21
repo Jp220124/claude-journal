@@ -21,6 +21,7 @@ import {
   deleteTodo,
   moveTodoToCategory,
 } from '@/lib/taskCategoryService'
+import { triggerResearch, getResearchStatus } from '@/lib/researchService'
 import type { TaskCategory, Todo, TaskCategoryWithTodos } from '@/types/database'
 
 interface Task {
@@ -76,6 +77,10 @@ export default function TodayPage() {
   const [newCategoryIcon, setNewCategoryIcon] = useState('folder')
   const [newCategoryColor, setNewCategoryColor] = useState('#6366f1')
   const [newCategoryIsRecurring, setNewCategoryIsRecurring] = useState(false)
+
+  // Research state
+  const [researchEnabled, setResearchEnabled] = useState(false)
+  const [isResearching, setIsResearching] = useState<string | null>(null) // task ID being researched
 
   const categoryModalRef = useRef<HTMLDivElement>(null)
   const datePickerRef = useRef<HTMLDivElement>(null)
@@ -175,6 +180,44 @@ export default function TodayPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Check if research is enabled
+  useEffect(() => {
+    async function checkResearch() {
+      try {
+        const status = await getResearchStatus()
+        setResearchEnabled(status.enabled)
+      } catch (err) {
+        console.error('Error checking research status:', err)
+      }
+    }
+    if (!isDemo) {
+      checkResearch()
+    }
+  }, [isDemo])
+
+  // Handle research trigger
+  const handleTriggerResearch = async (task: Task) => {
+    if (isDemo || isResearching) return
+
+    setIsResearching(task.id)
+    try {
+      const result = await triggerResearch({
+        taskId: task.id,
+        taskName: task.title,
+        taskDescription: task.notes,
+        categoryId: task.category_id || undefined,
+      })
+      if (result.success) {
+        alert(`Research started! Job ID: ${result.jobId}\n\nYou can track progress on the Research page.`)
+      }
+    } catch (err) {
+      console.error('Error triggering research:', err)
+      alert(err instanceof Error ? err.message : 'Failed to start research')
+    } finally {
+      setIsResearching(null)
+    }
+  }
 
   // Update allTasks when categories change
   useEffect(() => {
@@ -851,6 +894,28 @@ export default function TodayPage() {
                                   </div>
                                   {!task.completed && (
                                     <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                      {researchEnabled && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleTriggerResearch(task)
+                                          }}
+                                          disabled={isResearching === task.id}
+                                          className={cn(
+                                            "p-2 transition-colors rounded-full",
+                                            isResearching === task.id
+                                              ? "text-cyan-600 bg-cyan-50"
+                                              : "text-slate-400 hover:text-cyan-600 hover:bg-cyan-50"
+                                          )}
+                                          title="Research this task"
+                                        >
+                                          {isResearching === task.id ? (
+                                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-cyan-600 border-t-transparent"></div>
+                                          ) : (
+                                            <span className="material-symbols-outlined text-[20px]">science</span>
+                                          )}
+                                        </button>
+                                      )}
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation()
@@ -946,6 +1011,32 @@ export default function TodayPage() {
                   onChange={(e) => handleUpdateTask(selectedTask.id, { title: e.target.value })}
                 />
               </div>
+
+              {/* Research Trigger Button */}
+              {researchEnabled && !selectedTask.completed && (
+                <button
+                  onClick={() => handleTriggerResearch(selectedTask)}
+                  disabled={isResearching === selectedTask.id || isDemo}
+                  className={cn(
+                    "flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold transition-all",
+                    isResearching === selectedTask.id
+                      ? "bg-cyan-100 text-cyan-600 cursor-wait"
+                      : "bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-600 hover:to-blue-600 shadow-md hover:shadow-lg"
+                  )}
+                >
+                  {isResearching === selectedTask.id ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-600 border-t-transparent"></div>
+                      Starting Research...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-lg">science</span>
+                      Research This Task
+                    </>
+                  )}
+                </button>
+              )}
 
               <div className="grid grid-cols-1 gap-6">
                 {/* Category */}

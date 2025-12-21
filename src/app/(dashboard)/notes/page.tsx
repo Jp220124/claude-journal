@@ -1280,15 +1280,28 @@ function NotesPageContent() {
                   <button
                     key={note.id}
                     onClick={() => setSelectedNote(note)}
-                    className="text-left p-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-cyan-300 dark:hover:border-cyan-600 hover:shadow-md transition-all group"
-                  >
-                    {/* Pin indicator */}
-                    {note.is_pinned && (
-                      <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 mb-2">
-                        <span className="material-symbols-outlined text-[14px]">push_pin</span>
-                        Pinned
-                      </span>
+                    className={cn(
+                      'text-left p-4 border rounded-xl hover:shadow-md transition-all group',
+                      note.source_type === 'research'
+                        ? 'bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 border-cyan-200 dark:border-cyan-700 hover:border-cyan-400 dark:hover:border-cyan-500'
+                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-cyan-300 dark:hover:border-cyan-600'
                     )}
+                  >
+                    {/* Badges */}
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      {note.is_pinned && (
+                        <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                          <span className="material-symbols-outlined text-[14px]">push_pin</span>
+                          Pinned
+                        </span>
+                      )}
+                      {note.source_type === 'research' && (
+                        <span className="inline-flex items-center gap-1 text-xs bg-cyan-100 dark:bg-cyan-800/50 text-cyan-700 dark:text-cyan-300 px-2 py-0.5 rounded-full font-medium">
+                          <span className="material-symbols-outlined text-[14px]">science</span>
+                          Research
+                        </span>
+                      )}
+                    </div>
 
                     {/* Title */}
                     <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
@@ -1303,7 +1316,15 @@ function NotesPageContent() {
                     {/* Footer */}
                     <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
                       <span>{format(new Date(note.updated_at), 'MMM d, yyyy')}</span>
-                      <span>{note.word_count || 0} words</span>
+                      <div className="flex items-center gap-2">
+                        {note.sources && note.sources.length > 0 && (
+                          <span className="text-cyan-600 dark:text-cyan-400 flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[12px]">link</span>
+                            {note.sources.length}
+                          </span>
+                        )}
+                        <span>{note.word_count || 0} words</span>
+                      </div>
                     </div>
                   </button>
                 ))}

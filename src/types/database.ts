@@ -660,6 +660,10 @@ export interface Note {
   word_count: number
   created_at: string
   updated_at: string
+  // Research automation fields
+  research_job_id?: string | null
+  source_type?: 'manual' | 'research' | 'import' | null
+  sources?: Array<{ title: string; url: string }> | null
 }
 
 export interface NoteTag {
@@ -680,7 +684,7 @@ export interface TaskNoteLink {
   id: string
   task_id: string
   note_id: string
-  link_type: 'reference' | 'checklist' | 'attachment'
+  link_type: 'reference' | 'checklist' | 'attachment' | 'research'
   created_at: string
 }
 

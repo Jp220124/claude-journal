@@ -121,47 +121,76 @@ export function LinkedNotesPanel({
             <p className="text-xs text-slate-400 py-2">No linked notes</p>
           ) : (
             <div className="space-y-2">
-              {linkedNotes.map(note => (
-                <div
-                  key={note.id}
-                  onClick={() => onNoteClick?.(note.id)}
-                  className={cn(
-                    'flex items-start gap-2 p-2 bg-slate-50 rounded-lg group/note',
-                    onNoteClick && 'cursor-pointer hover:bg-slate-100'
-                  )}
-                >
-                  {/* Note icon */}
-                  <span className="material-symbols-outlined text-slate-400 text-[16px] mt-0.5">
-                    article
-                  </span>
+              {linkedNotes.map(note => {
+                const isResearchNote = note.link_type === 'research' || note.source_type === 'research'
+                const sourcesCount = note.sources?.length || 0
 
-                  {/* Note info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-700 truncate">
-                      {note.title}
-                    </p>
-                    {note.content_text && (
-                      <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
-                        {note.content_text}
-                      </p>
+                return (
+                  <div
+                    key={note.id}
+                    onClick={() => onNoteClick?.(note.id)}
+                    className={cn(
+                      'flex items-start gap-2 p-2 rounded-lg group/note',
+                      isResearchNote
+                        ? 'bg-gradient-to-r from-cyan-50 to-blue-50 border border-cyan-100'
+                        : 'bg-slate-50',
+                      onNoteClick && 'cursor-pointer hover:bg-slate-100'
                     )}
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Updated {format(new Date(note.updated_at), 'MMM d')}
-                    </p>
-                  </div>
+                  >
+                    {/* Note icon */}
+                    <span className={cn(
+                      'material-symbols-outlined text-[16px] mt-0.5',
+                      isResearchNote ? 'text-cyan-600' : 'text-slate-400'
+                    )}>
+                      {isResearchNote ? 'science' : 'article'}
+                    </span>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover/note:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => handleUnlink(note.id, e)}
-                      className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                      title="Unlink note"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">link_off</span>
-                    </button>
+                    {/* Note info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className={cn(
+                          'text-sm font-medium truncate',
+                          isResearchNote ? 'text-cyan-800' : 'text-slate-700'
+                        )}>
+                          {note.title}
+                        </p>
+                        {isResearchNote && (
+                          <span className="text-[10px] bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded-full font-medium shrink-0">
+                            Research
+                          </span>
+                        )}
+                      </div>
+                      {note.content_text && (
+                        <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+                          {note.content_text}
+                        </p>
+                      )}
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-[10px] text-slate-400">
+                          Updated {format(new Date(note.updated_at), 'MMM d')}
+                        </p>
+                        {sourcesCount > 0 && (
+                          <span className="text-[10px] text-cyan-600 flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[12px]">link</span>
+                            {sourcesCount} sources
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover/note:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => handleUnlink(note.id, e)}
+                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Unlink note"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">link_off</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

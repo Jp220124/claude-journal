@@ -18,6 +18,7 @@ const navItems = [
   { href: '/today', label: 'Today', icon: 'check_box' },
   { href: '/journal', label: 'Journal', icon: 'book' },
   { href: '/notes', label: 'Notes', icon: 'edit_note' },
+  { href: '/research', label: 'Research', icon: 'science' },
   { href: '/files', label: 'Files', icon: 'folder_open' },
   { href: '/templates', label: 'Templates', icon: 'style' },
   { href: '/calendar', label: 'Calendar', icon: 'calendar_month' },
