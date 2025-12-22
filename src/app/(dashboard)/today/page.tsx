@@ -71,9 +71,11 @@ export default function TodayPage() {
   const [newTaskCategoryId, setNewTaskCategoryId] = useState<string | null>(null)
   const [newTaskDueDate, setNewTaskDueDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'))
   const [newTaskDueTime, setNewTaskDueTime] = useState<string>('')
-  const [showDatePicker, setShowDatePicker] = useState(false)
-  const [activeTab, setActiveTab] = useState<'todo' | 'completed' | 'high'>('todo')
-  const [greeting, setGreeting] = useState('Good Morning')
+  const [newTaskPriority, setNewTaskPriority] = useState<'low' | 'medium' | 'high'>('medium')
+  const [activeTab, setActiveTab] = useState<'all' | 'today' | 'recurring'>('all')
+  const [activeFilter, setActiveFilter] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortBy, setSortBy] = useState<'priority' | 'dueDate' | 'name'>('priority')
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
@@ -96,10 +98,9 @@ export default function TodayPage() {
 
   // Research state
   const [researchEnabled, setResearchEnabled] = useState(false)
-  const [isResearching, setIsResearching] = useState<string | null>(null) // task ID being researched
+  const [isResearching, setIsResearching] = useState<string | null>(null)
 
   const categoryModalRef = useRef<HTMLDivElement>(null)
-  const datePickerRef = useRef<HTMLDivElement>(null)
   const starterCategoriesCreated = useRef(false)
 
   const today = new Date()
@@ -112,20 +113,12 @@ export default function TodayPage() {
 
   const pendingTasks = allTasks.filter(t => !t.completed)
   const completedTasks = allTasks.filter(t => t.completed)
-  const progress = allTasks.length > 0 ? Math.round((completedTasks.length / allTasks.length) * 100) : 0
-
-  // Set greeting based on time of day
-  useEffect(() => {
-    const hour = new Date().getHours()
-    if (hour < 12) setGreeting('Good Morning')
-    else if (hour < 17) setGreeting('Good Afternoon')
-    else setGreeting('Good Evening')
-  }, [])
+  const dueTodayCount = pendingTasks.filter(t => t.dueDate === dateStr).length
+  const overdueCount = pendingTasks.filter(t => t.dueDate && t.dueDate < dateStr).length
 
   // Load categories and todos
   const loadData = useCallback(async () => {
     if (isDemo) {
-      // Demo mode - show demo tasks in a single category
       const demoCategory: TaskCategoryWithTodos = {
         id: 'demo',
         user_id: 'demo',
@@ -156,14 +149,13 @@ export default function TodayPage() {
       }
       setCategories([demoCategory])
       setAllTasks(demoTasksData)
-      setExpandedCategories(new Set(['demo']))
+      setExpandedCategories(new Set()) // Start collapsed
       setIsLoading(false)
       return
     }
 
     setIsLoading(true)
     try {
-      // Check if user has categories, if not create starter ones (only once per session)
       if (!starterCategoriesCreated.current) {
         const hasCategories = await hasTaskCategories()
         if (!hasCategories) {
@@ -172,20 +164,14 @@ export default function TodayPage() {
         starterCategoriesCreated.current = true
       }
 
-      // Fetch categories with todos
       const data = await fetchCategoriesWithTodos(dateStr)
       setCategories(data)
 
-      // Extract all tasks
       const tasks = data.flatMap(cat => cat.todos.map(todoToTask))
       setAllTasks(tasks)
 
-      // Expand all categories by default
-      setExpandedCategories(new Set(data.map(c => c.id)))
-
-      if (tasks.length > 0) {
-        setSelectedTask(prev => prev || tasks[0])
-      }
+      setExpandedCategories(new Set()) // Start collapsed
+      // Don't auto-select any task - sidebar should be hidden until user clicks a task
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -204,10 +190,8 @@ export default function TodayPage() {
         const status = await getResearchStatus()
         setResearchEnabled(status.enabled)
 
-        // Load category automations if research is enabled
         if (status.enabled) {
           const automations = await getCategoryAutomations()
-          // Create a map of category_id -> automation for easy lookup
           const automationMap: Record<string, CategoryAutomation> = {}
           automations.forEach(a => {
             automationMap[a.category_id] = a
@@ -272,8 +256,9 @@ export default function TodayPage() {
           id: Date.now().toString(),
           title: newTaskTitle,
           completed: false,
-          priority: 'medium',
+          priority: newTaskPriority,
           category_id: 'demo',
+          dueDate: newTaskDueDate,
         }
         setAllTasks([newTask, ...allTasks])
         setNewTaskTitle('')
@@ -284,17 +269,17 @@ export default function TodayPage() {
       try {
         const result = await createTodo({
           title: newTaskTitle,
-          priority: 'medium',
+          priority: newTaskPriority,
           due_date: newTaskDueDate,
           due_time: newTaskDueTime || null,
           category_id: newTaskCategoryId,
         })
         if (result) {
-          await loadData() // Reload to get updated categories
+          await loadData()
           setNewTaskTitle('')
-          // Reset to today after creating
           setNewTaskDueDate(format(new Date(), 'yyyy-MM-dd'))
           setNewTaskDueTime('')
+          setNewTaskPriority('medium')
         }
       } catch (error) {
         console.error('Error creating todo:', error)
@@ -310,12 +295,9 @@ export default function TodayPage() {
     if (!task) return
 
     const newCompleted = !task.completed
-
-    // Find if this task belongs to a recurring category
     const taskCategory = categories.find(cat => cat.id === task.category_id)
     const isRecurringCategory = taskCategory?.is_recurring ?? false
 
-    // Optimistic update
     setCategories(prev => prev.map(cat => ({
       ...cat,
       todos: cat.todos.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t)
@@ -337,7 +319,6 @@ export default function TodayPage() {
 
   // Update task details
   const handleUpdateTask = async (taskId: string, updates: Partial<Task>) => {
-    // Optimistic update
     setCategories(prev => prev.map(cat => ({
       ...cat,
       todos: cat.todos.map(t => t.id === taskId ? { ...t, ...updates } : t)
@@ -367,7 +348,6 @@ export default function TodayPage() {
 
   // Delete a task
   const handleDeleteTask = async (taskId: string) => {
-    // Optimistic update
     setCategories(prev => prev.map(cat => ({
       ...cat,
       todos: cat.todos.filter(t => t.id !== taskId)
@@ -428,10 +408,8 @@ export default function TodayPage() {
         categoryId = newCategory.id
       }
 
-      // Handle automation settings if research is enabled
       if (researchEnabled) {
         if (enableAutomation) {
-          // Create or update automation
           if (existingAutomationId) {
             const updated = await updateCategoryAutomation(existingAutomationId, {
               research_depth: automationResearchDepth,
@@ -439,7 +417,6 @@ export default function TodayPage() {
               max_sources: automationMaxSources,
               is_active: true,
             })
-            // Update local state
             setCategoryAutomations(prev => ({ ...prev, [categoryId]: updated }))
           } else {
             const created = await createCategoryAutomation({
@@ -448,11 +425,9 @@ export default function TodayPage() {
               askClarification: automationAskClarification,
               maxSources: automationMaxSources,
             })
-            // Update local state
             setCategoryAutomations(prev => ({ ...prev, [categoryId]: created }))
           }
         } else if (existingAutomationId) {
-          // Disable automation (set is_active to false)
           const updated = await updateCategoryAutomation(existingAutomationId, {
             is_active: false,
           })
@@ -488,7 +463,6 @@ export default function TodayPage() {
       setNewCategoryColor(category.color)
       setNewCategoryIsRecurring(category.is_recurring)
 
-      // Load existing automation settings for this category
       const existingAutomation = categoryAutomations[category.id]
       if (existingAutomation) {
         setEnableAutomation(existingAutomation.is_active)
@@ -509,7 +483,6 @@ export default function TodayPage() {
       setNewCategoryIcon('folder')
       setNewCategoryColor('#6366f1')
       setNewCategoryIsRecurring(false)
-      // Reset automation settings for new category
       setEnableAutomation(false)
       setAutomationResearchDepth('medium')
       setAutomationAskClarification(false)
@@ -523,7 +496,6 @@ export default function TodayPage() {
     setShowCategoryModal(false)
     setEditingCategory(null)
     setNewCategoryName('')
-    // Reset automation settings
     setEnableAutomation(false)
     setAutomationResearchDepth('medium')
     setAutomationAskClarification(false)
@@ -544,19 +516,6 @@ export default function TodayPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showCategoryModal])
 
-  // Close date picker on outside click
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
-        setShowDatePicker(false)
-      }
-    }
-    if (showDatePicker) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [showDatePicker])
-
   // Helper to format date for display
   const formatDateForDisplay = (dateStr: string) => {
     const date = new Date(dateStr + 'T00:00:00')
@@ -569,59 +528,149 @@ export default function TodayPage() {
     return format(date, 'MMM d')
   }
 
-  // Quick date options
-  const getQuickDateOptions = () => {
+  // Get filtered and sorted tasks
+  const getFilteredTasks = () => {
+    let filtered = allTasks.filter(t => !t.completed)
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(t => t.title.toLowerCase().includes(query))
+    }
+
+    // Apply tab filter
+    if (activeTab === 'today') {
+      filtered = filtered.filter(t => t.dueDate === dateStr)
+    } else if (activeTab === 'recurring') {
+      const recurringCatIds = categories.filter(c => c.is_recurring).map(c => c.id)
+      filtered = filtered.filter(t => t.category_id && recurringCatIds.includes(t.category_id))
+    }
+
+    // Apply category filter
+    if (activeFilter) {
+      if (activeFilter === 'high') {
+        filtered = filtered.filter(t => t.priority === 'high')
+      } else {
+        filtered = filtered.filter(t => t.category_id === activeFilter)
+      }
+    }
+
+    // Sort
+    filtered.sort((a, b) => {
+      if (sortBy === 'priority') {
+        const priorityOrder = { high: 0, medium: 1, low: 2 }
+        return priorityOrder[a.priority] - priorityOrder[b.priority]
+      } else if (sortBy === 'dueDate') {
+        return (a.dueDate || '9999').localeCompare(b.dueDate || '9999')
+      } else {
+        return a.title.localeCompare(b.title)
+      }
+    })
+
+    return filtered
+  }
+
+  // Group tasks by category
+  const getGroupedTasks = () => {
+    const filtered = getFilteredTasks()
+    const grouped: Record<string, { category: TaskCategoryWithTodos, tasks: Task[] }> = {}
+
+    // First pass: group by category
+    filtered.forEach(task => {
+      const catId = task.category_id || 'uncategorized'
+      if (!grouped[catId]) {
+        const category = categories.find(c => c.id === catId)
+        if (category) {
+          grouped[catId] = { category, tasks: [] }
+        } else {
+          // Uncategorized fallback
+          grouped[catId] = {
+            category: {
+              id: 'uncategorized',
+              user_id: '',
+              name: 'Uncategorized',
+              icon: 'folder',
+              color: '#64748b',
+              is_recurring: false,
+              order_index: 999,
+              is_active: true,
+              created_at: '',
+              updated_at: '',
+              todos: []
+            },
+            tasks: []
+          }
+        }
+      }
+      grouped[catId].tasks.push(task)
+    })
+
+    return Object.values(grouped).sort((a, b) => a.category.order_index - b.category.order_index)
+  }
+
+  const groupedTasks = getGroupedTasks()
+
+  // Get priority display info
+  const getPriorityInfo = (priority: string) => {
+    switch (priority) {
+      case 'high':
+        return { label: 'URGENT', color: 'text-white', bg: 'bg-orange-500', border: '' }
+      case 'medium':
+        return { label: 'MEDIUM', color: 'text-orange-600', bg: 'bg-transparent', border: 'border border-orange-300' }
+      default:
+        return { label: 'LOW', color: 'text-blue-600', bg: 'bg-transparent', border: 'border border-blue-300' }
+    }
+  }
+
+  // Format due date with time
+  const formatDueDateTime = (dueDate?: string, dueTime?: string) => {
+    if (!dueDate) return null
+
+    const date = new Date(dueDate + 'T00:00:00')
     const today = new Date()
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
-    const nextWeek = new Date(today)
-    nextWeek.setDate(nextWeek.getDate() + 7)
 
-    return [
-      { label: 'Today', value: format(today, 'yyyy-MM-dd') },
-      { label: 'Tomorrow', value: format(tomorrow, 'yyyy-MM-dd') },
-      { label: 'Next Week', value: format(nextWeek, 'yyyy-MM-dd') },
-    ]
-  }
-
-  const getPriorityStyles = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-orange-50 text-orange-600 border-orange-100'
-      case 'medium':
-        return 'bg-cyan-50 text-cyan-600 border-cyan-100'
-      default:
-        return 'bg-slate-100 text-slate-600 border-slate-200'
+    let dateText = ''
+    if (dueDate === format(today, 'yyyy-MM-dd')) {
+      dateText = 'Today'
+    } else if (dueDate === format(tomorrow, 'yyyy-MM-dd')) {
+      dateText = 'Tomorrow'
+    } else {
+      dateText = format(date, 'MMM d')
     }
-  }
 
-  const getPriorityDot = (priority: string) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-orange-500'
-      case 'medium':
-        return 'bg-cyan-500'
-      default:
-        return 'bg-slate-400'
+    if (dueTime) {
+      // Format time like "5 PM" or "9:30 AM"
+      const [hours, minutes] = dueTime.split(':').map(Number)
+      const period = hours >= 12 ? 'PM' : 'AM'
+      const hour12 = hours % 12 || 12
+      const timeText = minutes === 0 ? `${hour12} ${period}` : `${hour12}:${minutes.toString().padStart(2, '0')} ${period}`
+      return `${dateText}, ${timeText}`
     }
+
+    return dateText
   }
 
-  // Filter categories based on active tab
-  const getFilteredCategories = () => {
-    return categories.map(cat => {
-      let filteredTodos = cat.todos
-      if (activeTab === 'todo') {
-        filteredTodos = cat.todos.filter(t => !t.completed)
-      } else if (activeTab === 'completed') {
-        filteredTodos = cat.todos.filter(t => t.completed)
-      } else if (activeTab === 'high') {
-        filteredTodos = cat.todos.filter(t => t.priority === 'high' && !t.completed)
-      }
-      return { ...cat, todos: filteredTodos }
-    }).filter(cat => cat.todos.length > 0 || activeTab === 'todo')
+  // Get category color styles
+  const getCategoryStyles = (category: TaskCategoryWithTodos) => {
+    const colors: Record<string, { headerBg: string, headerBorder: string, headerText: string }> = {
+      '#ef4444': { headerBg: 'bg-red-50/40', headerBorder: 'border-red-100/50', headerText: 'text-red-800' },
+      '#f97316': { headerBg: 'bg-orange-50/40', headerBorder: 'border-orange-100/50', headerText: 'text-orange-800' },
+      '#f59e0b': { headerBg: 'bg-amber-50/40', headerBorder: 'border-amber-100/50', headerText: 'text-amber-800' },
+      '#84cc16': { headerBg: 'bg-lime-50/40', headerBorder: 'border-lime-100/50', headerText: 'text-lime-800' },
+      '#22c55e': { headerBg: 'bg-green-50/40', headerBorder: 'border-green-100/50', headerText: 'text-green-800' },
+      '#10b981': { headerBg: 'bg-emerald-50/40', headerBorder: 'border-emerald-100/50', headerText: 'text-emerald-800' },
+      '#06b6d4': { headerBg: 'bg-cyan-50/40', headerBorder: 'border-cyan-100/50', headerText: 'text-cyan-800' },
+      '#3b82f6': { headerBg: 'bg-blue-50/40', headerBorder: 'border-blue-100/50', headerText: 'text-blue-800' },
+      '#6366f1': { headerBg: 'bg-indigo-50/40', headerBorder: 'border-indigo-100/50', headerText: 'text-indigo-800' },
+      '#8b5cf6': { headerBg: 'bg-violet-50/40', headerBorder: 'border-violet-100/50', headerText: 'text-violet-800' },
+      '#a855f7': { headerBg: 'bg-purple-50/40', headerBorder: 'border-purple-100/50', headerText: 'text-purple-800' },
+      '#ec4899': { headerBg: 'bg-pink-50/40', headerBorder: 'border-pink-100/50', headerText: 'text-pink-800' },
+      '#64748b': { headerBg: 'bg-slate-50/40', headerBorder: 'border-slate-100/50', headerText: 'text-slate-800' },
+    }
+    return colors[category.color] || colors['#64748b']
   }
-
-  const filteredCategories = getFilteredCategories()
 
   // Icon options for categories
   const iconOptions = [
@@ -638,509 +687,504 @@ export default function TodayPage() {
   ]
 
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full overflow-hidden bg-slate-50">
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-slate-50">
+      <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <header className="h-18 flex items-center justify-between px-8 py-5 bg-transparent z-10 shrink-0">
-          <div className="flex items-center gap-4 text-slate-500">
-            <div className="hidden sm:flex items-center gap-2 text-sm font-medium">
-              <span className="text-slate-400">Journal</span>
-              <span className="text-slate-300">/</span>
-              <span className="text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide">Today</span>
+        <header className="shrink-0 bg-white border-b border-slate-200 px-6 py-4">
+          <div className="flex items-center justify-between gap-4">
+            {/* Title & Badges */}
+            <div className="flex items-center gap-4">
+              <h1 className="text-xl font-bold text-slate-900">My Tasks</h1>
+              {dueTodayCount > 0 && (
+                <span className="px-2.5 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-semibold">
+                  {dueTodayCount} Due Today
+                </span>
+              )}
+              {overdueCount > 0 && (
+                <span className="px-2.5 py-1 bg-red-50 text-red-600 rounded-full text-xs font-semibold">
+                  {overdueCount} Overdue
+                </span>
+              )}
+            </div>
+
+            {/* Search Bar */}
+            <div className="flex-1 max-w-md">
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+                  search
+                </span>
+                <input
+                  type="text"
+                  placeholder="Search tasks..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-16 py-2 bg-slate-100 border-0 rounded-lg text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-200 focus:bg-white transition-all outline-none"
+                />
+                <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-white rounded border border-slate-200 text-[10px] font-medium text-slate-400 shadow-sm">
+                  ⌘K
+                </kbd>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openCategoryModal()}
+                className="flex items-center gap-1.5 px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
+                New Folder
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-2 mt-4 overflow-x-auto pb-1">
+            <button
+              onClick={() => {
+                const newFilter = activeFilter === 'high' ? null : 'high'
+                setActiveFilter(newFilter)
+                // Expand all categories when filtering by high priority
+                if (newFilter === 'high') {
+                  setExpandedCategories(new Set(categories.map(c => c.id)))
+                }
+              }}
+              className={cn(
+                "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                activeFilter === 'high'
+                  ? "bg-orange-100 text-orange-700"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              )}
+            >
+              <span className="material-symbols-outlined text-[14px]">priority_high</span>
+              High Priority
+            </button>
+            {categories.filter(c => c.id !== 'uncategorized').map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => {
+                  const newFilter = activeFilter === cat.id ? null : cat.id
+                  setActiveFilter(newFilter)
+                  // Expand the selected category when filtering
+                  if (newFilter) {
+                    setExpandedCategories(prev => new Set([...prev, newFilter]))
+                  }
+                }}
+                className={cn(
+                  "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                  activeFilter === cat.id
+                    ? "text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                )}
+                style={activeFilter === cat.id ? { backgroundColor: cat.color } : {}}
+              >
+                <span className="material-symbols-outlined text-[14px]">{cat.icon}</span>
+                {cat.name}
+              </button>
+            ))}
             <button
               onClick={() => openCategoryModal()}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-slate-600 rounded-xl text-sm font-medium shadow-sm hover:shadow-md transition-all border border-slate-200 hover:border-cyan-200"
+              className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors border border-dashed border-slate-300"
             >
-              <span className="material-symbols-outlined text-[18px]">add</span>
-              New Category
+              <span className="material-symbols-outlined text-[14px]">add</span>
+              New Folder
             </button>
           </div>
         </header>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 md:px-10 pb-10">
-          <div className="max-w-4xl mx-auto flex flex-col gap-8">
-            {/* Demo Mode Banner */}
-            {isDemo && (
-              <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
-                <span className="font-medium">Demo Mode:</span> Changes are not saved. Create an account to save your tasks.
-              </div>
-            )}
-
-            {/* Welcome Card */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-3xl shadow-soft">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-cyan-500 font-bold text-sm uppercase tracking-wider">
-                  <span className="material-symbols-outlined text-xl fill">light_mode</span>
-                  {greeting}
-                </div>
-                <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight">
-                  {format(today, 'EEEE,')}<br />
-                  {format(today, 'MMM d')}
-                </h2>
-                <p className="text-slate-500 font-medium text-base mt-1">
-                  {isLoading
-                    ? 'Loading your tasks...'
-                    : pendingTasks.length > 0
-                    ? `You have ${pendingTasks.length} tasks remaining for today.`
-                    : allTasks.length > 0
-                    ? "All tasks completed! Great job!"
-                    : "No tasks yet. Add your first task below."
-                  }
-                </p>
-              </div>
-              <div className="flex flex-col gap-4 w-full md:w-64 bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-slate-600 font-semibold text-sm">Daily Progress</span>
-                  <span className="text-cyan-600 font-bold text-lg">{progress}%</span>
-                </div>
-                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-cyan-500 rounded-full transition-all duration-700 ease-out"
-                    style={{ width: `${progress}%` }}
-                  ></div>
-                </div>
-                <div className="text-sm text-center font-medium text-slate-400">
-                  {completedTasks.length}/{allTasks.length} Tasks Completed
-                </div>
-              </div>
-            </div>
-
-            {/* Add Task Input */}
-            <div className="group relative shadow-sm hover:shadow-md transition-shadow duration-300 rounded-2xl bg-white">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-5 pointer-events-none text-cyan-600">
-                <span className="material-symbols-outlined text-2xl">add_circle</span>
-              </div>
-              <input
-                className="block w-full py-5 pl-14 pr-[340px] text-lg font-medium bg-transparent border border-transparent rounded-2xl focus:ring-2 focus:ring-cyan-200 focus:bg-white placeholder:text-slate-400 transition-all text-slate-800 outline-none disabled:opacity-50"
-                placeholder="Add a new task..."
-                type="text"
-                value={newTaskTitle}
-                onChange={(e) => setNewTaskTitle(e.target.value)}
-                onKeyDown={handleAddTask}
-                disabled={isSaving}
-              />
-              <div className="absolute inset-y-0 right-0 flex items-center pr-4 gap-2">
-                {/* Date picker for new task */}
-                <div className="relative" ref={datePickerRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowDatePicker(!showDatePicker)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
-                      newTaskDueDate === format(new Date(), 'yyyy-MM-dd')
-                        ? "bg-cyan-50 text-cyan-600 hover:bg-cyan-100"
-                        : "bg-purple-50 text-purple-600 hover:bg-purple-100"
-                    )}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">calendar_today</span>
-                    {formatDateForDisplay(newTaskDueDate)}
-                  </button>
-
-                  {/* Date picker dropdown */}
-                  {showDatePicker && (
-                    <div className="absolute top-full right-0 mt-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 min-w-[200px]">
-                      {/* Quick options */}
-                      <div className="flex flex-col gap-1 mb-3">
-                        {getQuickDateOptions().map(option => (
-                          <button
-                            key={option.value}
-                            onClick={() => {
-                              setNewTaskDueDate(option.value)
-                              setShowDatePicker(false)
-                            }}
-                            className={cn(
-                              "text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors",
-                              newTaskDueDate === option.value
-                                ? "bg-cyan-50 text-cyan-600"
-                                : "hover:bg-slate-50 text-slate-700"
-                            )}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Divider */}
-                      <div className="border-t border-slate-100 my-2"></div>
-
-                      {/* Custom date input */}
-                      <div className="flex flex-col gap-2">
-                        <label className="text-xs font-bold text-slate-400 uppercase">Custom Date</label>
-                        <input
-                          type="date"
-                          value={newTaskDueDate}
-                          onChange={(e) => {
-                            setNewTaskDueDate(e.target.value)
-                            setShowDatePicker(false)
-                          }}
-                          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-200 outline-none"
-                        />
-                      </div>
-
-                      {/* Time input */}
-                      <div className="flex flex-col gap-2 mt-3">
-                        <label className="text-xs font-bold text-slate-400 uppercase">Time (Optional)</label>
-                        <input
-                          type="time"
-                          value={newTaskDueTime}
-                          onChange={(e) => setNewTaskDueTime(e.target.value)}
-                          className="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-200 outline-none"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Category selector for new task */}
-                <select
-                  value={newTaskCategoryId || ''}
-                  onChange={(e) => setNewTaskCategoryId(e.target.value || null)}
-                  className="text-sm bg-slate-100 border-none rounded-lg px-3 py-1.5 text-slate-600 focus:ring-2 focus:ring-cyan-200"
-                >
-                  <option value="">No category</option>
-                  {categories.filter(c => c.id !== 'uncategorized').map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.name}</option>
-                  ))}
-                </select>
-                {isSaving ? (
-                  <span className="text-xs text-cyan-600 font-medium">Saving...</span>
-                ) : (
-                  <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-slate-400 bg-slate-100 rounded-lg border border-slate-200 shadow-sm">
-                    <span className="text-xs">Enter</span>
-                  </kbd>
+        {/* Add Task Bar */}
+        <div className="shrink-0 bg-white border-b border-slate-200 px-6 py-3">
+          <div className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-slate-400 text-[20px]">add_circle</span>
+            <input
+              type="text"
+              placeholder="Add a new task..."
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              onKeyDown={handleAddTask}
+              disabled={isSaving}
+              className="flex-1 border-0 p-0 text-sm placeholder:text-slate-400 focus:ring-0 outline-none disabled:opacity-50"
+            />
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setNewTaskDueDate(format(new Date(), 'yyyy-MM-dd'))}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  newTaskDueDate === format(new Date(), 'yyyy-MM-dd')
+                    ? "bg-cyan-50 text-cyan-600"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 )}
-              </div>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex flex-col gap-6">
-              <div className="flex gap-6 border-b border-slate-200 pb-1 px-2">
-                <button
-                  onClick={() => setActiveTab('todo')}
-                  className={`pb-3 text-sm font-bold transition-colors ${
-                    activeTab === 'todo'
-                      ? 'text-cyan-600 border-b-2 border-cyan-600'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  To Do ({pendingTasks.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('completed')}
-                  className={`pb-3 text-sm font-semibold transition-colors ${
-                    activeTab === 'completed'
-                      ? 'text-cyan-600 border-b-2 border-cyan-600'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  Completed ({completedTasks.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('high')}
-                  className={`pb-3 text-sm font-semibold transition-colors ${
-                    activeTab === 'high'
-                      ? 'text-cyan-600 border-b-2 border-cyan-600'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  High Priority
-                </button>
-              </div>
-
-              {/* Categorized Task List */}
-              <div className="flex flex-col gap-6">
-                {isLoading ? (
-                  <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <div className="w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="text-sm text-slate-500">Loading tasks...</p>
-                  </div>
-                ) : filteredCategories.length > 0 ? (
-                  filteredCategories.map((category) => {
-                    const catPendingCount = category.todos.filter(t => !t.completed).length
-                    const catCompletedCount = category.todos.filter(t => t.completed).length
-                    const isExpanded = expandedCategories.has(category.id)
-
-                    return (
-                      <div key={category.id} className="flex flex-col gap-3">
-                        {/* Category Header */}
-                        <div className="flex items-center justify-between px-2">
-                          <button
-                            onClick={() => toggleCategoryExpand(category.id)}
-                            className="flex items-center gap-3 group"
-                          >
-                            <div
-                              className="w-8 h-8 rounded-lg flex items-center justify-center"
-                              style={{ backgroundColor: `${category.color}20` }}
-                            >
-                              <span
-                                className="material-symbols-outlined"
-                                style={{ fontSize: '18px', color: category.color }}
-                              >
-                                {category.icon}
-                              </span>
-                            </div>
-                            <span className="text-sm font-bold uppercase tracking-wider text-slate-500 group-hover:text-slate-700">
-                              {category.name}
-                            </span>
-                            <span className="material-symbols-outlined text-slate-400 text-[18px] transition-transform" style={{ transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
-                              expand_more
-                            </span>
-                          </button>
-                          <div className="flex items-center gap-3">
-                            {activeTab === 'todo' && catPendingCount > 0 && (
-                              <span className="text-xs font-medium text-slate-400">
-                                {catPendingCount} Remaining
-                              </span>
-                            )}
-                            {activeTab === 'todo' && catCompletedCount > 0 && (
-                              <span className="text-xs font-medium px-2 py-0.5 bg-cyan-50 text-cyan-600 rounded">
-                                {catCompletedCount}/{category.todos.length + catCompletedCount} Done
-                              </span>
-                            )}
-                            {category.id !== 'uncategorized' && (
-                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => openCategoryModal(category)}
-                                  className="p-1 text-slate-400 hover:text-slate-600 rounded"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">edit</span>
-                                </button>
-                                <button
-                                  onClick={() => handleDeleteCategory(category.id)}
-                                  className="p-1 text-slate-400 hover:text-red-600 rounded"
-                                >
-                                  <span className="material-symbols-outlined text-[16px]">delete</span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Tasks in Category */}
-                        {isExpanded && (
-                          <div className="flex flex-col gap-3">
-                            {category.todos.map((todo) => {
-                              const task = todoToTask(todo)
-                              return (
-                                <div
-                                  key={task.id}
-                                  onClick={() => setSelectedTask(task)}
-                                  className={cn(
-                                    'group flex items-start sm:items-center gap-4 p-5 bg-white border rounded-2xl cursor-pointer transition-all hover:scale-[1.005] relative overflow-hidden',
-                                    selectedTask?.id === task.id
-                                      ? 'border-cyan-200 shadow-[0_4px_20px_-4px_rgba(8,145,178,0.1)] ring-1 ring-cyan-100'
-                                      : task.completed
-                                      ? 'border-transparent bg-slate-50 opacity-70 hover:opacity-100'
-                                      : 'border-slate-100 hover:bg-slate-50 hover:shadow-card hover:border-slate-200'
-                                  )}
-                                >
-                                  {selectedTask?.id === task.id && !task.completed && (
-                                    <div
-                                      className="absolute left-0 top-0 bottom-0 w-1 rounded-l-2xl"
-                                      style={{ backgroundColor: category.color }}
-                                    ></div>
-                                  )}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleToggleComplete(task.id)
-                                    }}
-                                    className={`flex-shrink-0 mt-0.5 sm:mt-0 transition-colors ${
-                                      task.completed ? 'text-cyan-600' : 'text-slate-300 hover:text-cyan-600'
-                                    }`}
-                                  >
-                                    <span className={`material-symbols-outlined text-2xl ${task.completed ? 'fill-1' : ''}`}>
-                                      {task.completed ? 'check_circle' : 'radio_button_unchecked'}
-                                    </span>
-                                  </button>
-                                  <div className="flex-1 min-w-0 flex flex-col gap-1">
-                                    <h3 className={`text-base font-semibold truncate transition-colors ${
-                                      task.completed
-                                        ? 'text-slate-500 line-through'
-                                        : 'text-slate-700 group-hover:text-slate-900'
-                                    }`}>
-                                      {linkifyText(task.title)}
-                                    </h3>
-                                    {!task.completed && (
-                                      <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
-                                        <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md border ${getPriorityStyles(task.priority)}`}>
-                                          <span className={`size-1.5 rounded-full ${getPriorityDot(task.priority)}`}></span>
-                                          {task.priority === 'high' ? 'High Priority' : task.priority === 'medium' ? 'Medium' : 'Low'}
-                                        </span>
-                                        {task.dueTime && (
-                                          <span className="flex items-center gap-1 text-slate-500">
-                                            <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                            {task.dueTime}
-                                          </span>
-                                        )}
-                                        {category.is_recurring && (
-                                          <span className="flex items-center gap-1 text-slate-500">
-                                            <span className="material-symbols-outlined text-[16px]">repeat</span>
-                                            Daily
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                  {!task.completed && (
-                                    <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                      {researchEnabled && (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleTriggerResearch(task)
-                                          }}
-                                          disabled={isResearching === task.id}
-                                          className={cn(
-                                            "p-2 transition-colors rounded-full",
-                                            isResearching === task.id
-                                              ? "text-cyan-600 bg-cyan-50"
-                                              : "text-slate-400 hover:text-cyan-600 hover:bg-cyan-50"
-                                          )}
-                                          title="Research this task"
-                                        >
-                                          {isResearching === task.id ? (
-                                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-cyan-600 border-t-transparent"></div>
-                                          ) : (
-                                            <span className="material-symbols-outlined text-[20px]">science</span>
-                                          )}
-                                        </button>
-                                      )}
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleDeleteTask(task.id)
-                                        }}
-                                        className="p-2 text-slate-400 hover:text-red-600 transition-colors rounded-full hover:bg-red-50"
-                                      >
-                                        <span className="material-symbols-outlined text-[20px]">delete</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-16 text-center">
-                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                      <span className="material-symbols-outlined text-slate-400" style={{ fontSize: '32px' }}>
-                        {activeTab === 'completed' ? 'task_alt' : activeTab === 'high' ? 'priority_high' : 'checklist'}
-                      </span>
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-900 mb-2">
-                      {activeTab === 'completed'
-                        ? 'No completed tasks yet'
-                        : activeTab === 'high'
-                        ? 'No high priority tasks'
-                        : 'No tasks yet'}
-                    </h3>
-                    <p className="text-slate-500 max-w-sm">
-                      {activeTab === 'completed'
-                        ? 'Complete some tasks to see them here.'
-                        : activeTab === 'high'
-                        ? 'Add tasks with high priority to see them here.'
-                        : 'Add your first task using the input above.'}
-                    </p>
-                  </div>
+              >
+                <span className="material-symbols-outlined text-[14px]">today</span>
+                Today
+              </button>
+              <button
+                onClick={() => setNewTaskPriority(newTaskPriority === 'high' ? 'medium' : 'high')}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  newTaskPriority === 'high'
+                    ? "bg-red-50 text-red-600"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 )}
-              </div>
+              >
+                <span className="material-symbols-outlined text-[14px]">flag</span>
+                Priority
+              </button>
+              <select
+                value={newTaskCategoryId || ''}
+                onChange={(e) => setNewTaskCategoryId(e.target.value || null)}
+                className="text-xs bg-slate-100 border-0 rounded-lg px-2.5 py-1.5 text-slate-600 focus:ring-2 focus:ring-cyan-200"
+              >
+                <option value="">No folder</option>
+                {categories.filter(c => c.id !== 'uncategorized').map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Task Details Sidebar */}
-      <aside className="w-80 lg:w-96 flex-shrink-0 bg-white border-l border-slate-200 flex flex-col h-full overflow-y-auto hidden lg:flex shadow-[-4px_0_24px_-12px_rgba(0,0,0,0.02)] z-20">
-        {selectedTask ? (
-          <>
-            <div className="p-6 border-b border-slate-200 flex items-center justify-between bg-white/50 backdrop-blur-sm sticky top-0 z-10">
-              <span className="text-xs font-extrabold uppercase tracking-wider text-slate-400">Task Details</span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleDeleteTask(selectedTask.id)}
-                  className="p-2 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[20px]">delete</span>
-                </button>
-                <button
-                  onClick={() => setSelectedTask(null)}
-                  className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[20px]">close</span>
-                </button>
+        {/* Tabs & Sort */}
+        <div className="shrink-0 bg-white border-b border-slate-200 px-6 py-2 flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setActiveTab('all')}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                activeTab === 'all'
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-100"
+              )}
+            >
+              All Tasks
+            </button>
+            <button
+              onClick={() => setActiveTab('today')}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                activeTab === 'today'
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-100"
+              )}
+            >
+              My Day
+            </button>
+            <button
+              onClick={() => setActiveTab('recurring')}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                activeTab === 'recurring'
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600 hover:bg-slate-100"
+              )}
+            >
+              Recurring
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">Sort by</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'priority' | 'dueDate' | 'name')}
+              className="text-xs bg-transparent border-0 text-slate-600 font-medium focus:ring-0 cursor-pointer"
+            >
+              <option value="priority">Priority</option>
+              <option value="dueDate">Due Date</option>
+              <option value="name">Name</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Demo Banner */}
+        {isDemo && (
+          <div className="shrink-0 bg-amber-50 border-b border-amber-200 px-6 py-2 text-amber-800 text-xs">
+            <span className="font-medium">Demo Mode:</span> Changes are not saved. Create an account to save your tasks.
+          </div>
+        )}
+
+        {/* Task List */}
+        <div className="flex-1 overflow-y-auto bg-white">
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-sm text-slate-500">Loading tasks...</p>
               </div>
             </div>
-            <div className="flex-1 p-6 flex flex-col gap-8">
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center gap-3 group cursor-pointer">
-                  <div className="relative flex items-center justify-center size-6">
-                    <input
-                      type="checkbox"
-                      checked={selectedTask.completed}
-                      onChange={() => handleToggleComplete(selectedTask.id)}
-                      className="peer appearance-none size-5 border-2 border-slate-300 rounded-md checked:bg-cyan-600 checked:border-cyan-600 focus:ring-2 focus:ring-offset-1 focus:ring-cyan-300 transition-all cursor-pointer"
-                    />
-                    <span className="material-symbols-outlined text-white text-[16px] absolute opacity-0 peer-checked:opacity-100 pointer-events-none transition-opacity">
-                      check
-                    </span>
+          ) : groupedTasks.length > 0 ? (
+            <div>
+              {/* Category Groups */}
+              {groupedTasks.map(({ category, tasks }) => {
+                const isExpanded = expandedCategories.has(category.id)
+                const styles = getCategoryStyles(category)
+
+                return (
+                  <div key={category.id} className="border-b border-slate-100">
+                    {/* Category Header */}
+                    <button
+                      onClick={() => toggleCategoryExpand(category.id)}
+                      className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50 transition-colors"
+                      style={{ borderLeft: `3px solid ${category.color}` }}
+                    >
+                      <span className={cn("material-symbols-outlined text-[18px] text-slate-400 transition-transform", !isExpanded && "-rotate-90")}>
+                        {isExpanded ? 'expand_more' : 'chevron_right'}
+                      </span>
+                      <span className={cn("text-xs font-bold uppercase tracking-wide", styles.headerText)}>
+                        {category.name} ({tasks.length})
+                      </span>
+                      {category.is_recurring && (
+                        <span className="material-symbols-outlined text-[14px] text-slate-400">repeat</span>
+                      )}
+                    </button>
+
+                    {/* Tasks */}
+                    {isExpanded && (
+                      <div className="divide-y divide-slate-100">
+                        {tasks.map(task => {
+                          const priorityInfo = getPriorityInfo(task.priority)
+                          const isSelected = selectedTask?.id === task.id
+                          const isOverdue = task.dueDate && task.dueDate < dateStr
+                          const dueDateTimeText = formatDueDateTime(task.dueDate, task.dueTime)
+
+                          return (
+                            <div
+                              key={task.id}
+                              onClick={() => setSelectedTask(task)}
+                              className={cn(
+                                "group flex items-center gap-4 px-4 py-3 cursor-pointer transition-colors",
+                                isSelected ? "bg-cyan-50/50" : "hover:bg-slate-50"
+                              )}
+                            >
+                              {/* Checkbox */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleToggleComplete(task.id)
+                                }}
+                                className={cn(
+                                  "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+                                  task.completed
+                                    ? "bg-emerald-500 border-emerald-500 text-white"
+                                    : "border-slate-300 hover:border-cyan-500"
+                                )}
+                              >
+                                {task.completed && (
+                                  <span className="material-symbols-outlined text-[14px]">check</span>
+                                )}
+                              </button>
+
+                              {/* Task Content */}
+                              <div className="flex-1 min-w-0">
+                                <div className={cn(
+                                  "text-sm font-medium",
+                                  task.completed ? "text-slate-400 line-through" : "text-slate-800"
+                                )}>
+                                  {linkifyText(task.title)}
+                                </div>
+                                {task.notes && (
+                                  <div className="text-xs text-slate-400 truncate mt-0.5">
+                                    {task.notes.length > 50 ? task.notes.substring(0, 50) + '...' : task.notes}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Category Badge */}
+                              <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 rounded-full border border-slate-200">
+                                <span
+                                  className="w-2 h-2 rounded-full"
+                                  style={{ backgroundColor: category.color }}
+                                ></span>
+                                <span className="text-xs font-medium text-slate-600">{category.name}</span>
+                              </div>
+
+                              {/* Priority Badge */}
+                              {!task.completed && (
+                                <span className={cn(
+                                  "shrink-0 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide",
+                                  priorityInfo.bg,
+                                  priorityInfo.color,
+                                  priorityInfo.border
+                                )}>
+                                  {priorityInfo.label}
+                                </span>
+                              )}
+
+                              {/* Due Date/Time */}
+                              <div className={cn(
+                                "shrink-0 text-sm font-medium min-w-[100px] text-right",
+                                isOverdue ? "text-red-500" : task.completed ? "text-slate-400" : "text-slate-600"
+                              )}>
+                                {dueDateTimeText || (task.dueTime ? task.dueTime : '—')}
+                              </div>
+
+                              {/* Hover Actions */}
+                              <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                {researchEnabled && !task.completed && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleTriggerResearch(task)
+                                    }}
+                                    disabled={isResearching === task.id}
+                                    className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors"
+                                    title="Research"
+                                  >
+                                    {isResearching === task.id ? (
+                                      <div className="w-4 h-4 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                      <span className="material-symbols-outlined text-[18px]">science</span>
+                                    )}
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleDeleteTask(task.id)
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete"
+                                >
+                                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                  <span className="text-sm font-medium text-slate-500 group-hover:text-slate-700 transition-colors">
-                    Mark as complete
-                  </span>
-                </div>
-                <textarea
-                  className="w-full bg-transparent border-0 p-0 text-xl font-bold text-slate-900 focus:ring-0 resize-none h-auto leading-tight outline-none"
-                  placeholder="Task title"
-                  rows={2}
-                  value={selectedTask.title}
-                  onChange={(e) => handleUpdateTask(selectedTask.id, { title: e.target.value })}
-                />
+                )
+              })}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <span className="material-symbols-outlined text-6xl text-slate-300 mb-4 block">task_alt</span>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">No tasks found</h3>
+                <p className="text-sm text-slate-500">
+                  {searchQuery ? 'Try a different search term' : 'Add your first task using the input above'}
+                </p>
               </div>
+            </div>
+          )}
+        </div>
+      </div>
 
-              {/* Research Trigger Button */}
-              {researchEnabled && !selectedTask.completed && (
-                <button
-                  onClick={() => handleTriggerResearch(selectedTask)}
-                  disabled={isResearching === selectedTask.id || isDemo}
-                  className={cn(
-                    "flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold transition-all",
-                    isResearching === selectedTask.id
-                      ? "bg-cyan-100 text-cyan-600 cursor-wait"
-                      : "bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-600 hover:to-blue-600 shadow-md hover:shadow-lg"
-                  )}
-                >
-                  {isResearching === selectedTask.id ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-cyan-600 border-t-transparent"></div>
-                      Starting Research...
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-lg">science</span>
-                      Research This Task
-                    </>
-                  )}
-                </button>
-              )}
+      {/* Task Details Sidebar - Only shows when a task is selected */}
+      {selectedTask && (
+        <aside className="w-80 lg:w-96 shrink-0 bg-white border-l border-slate-200 flex flex-col h-full overflow-hidden transition-all duration-300 animate-in slide-in-from-right-4">
+            {/* Sidebar Header */}
+            <div className="shrink-0 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Task Details</span>
+              <button
+                onClick={() => setSelectedTask(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
 
-              <div className="grid grid-cols-1 gap-6">
-                {/* Category */}
+            {/* Sidebar Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="flex flex-col gap-6">
+                {/* Task Title */}
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleToggleComplete(selectedTask.id)}
+                      className={cn(
+                        "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
+                        selectedTask.completed
+                          ? "bg-cyan-600 border-cyan-600 text-white"
+                          : "border-slate-300 hover:border-cyan-600"
+                      )}
+                    >
+                      {selectedTask.completed && (
+                        <span className="material-symbols-outlined text-[14px]">check</span>
+                      )}
+                    </button>
+                    <span className="text-sm text-slate-500">Mark as complete</span>
+                  </div>
+                  <textarea
+                    className="w-full bg-transparent border-0 p-0 text-lg font-bold text-slate-900 focus:ring-0 resize-none outline-none leading-tight"
+                    placeholder="Task title"
+                    rows={2}
+                    value={selectedTask.title}
+                    onChange={(e) => handleUpdateTask(selectedTask.id, { title: e.target.value })}
+                  />
+                </div>
+
+                {/* Research Button */}
+                {researchEnabled && !selectedTask.completed && (
+                  <button
+                    onClick={() => handleTriggerResearch(selectedTask)}
+                    disabled={isResearching === selectedTask.id || isDemo}
+                    className={cn(
+                      "flex items-center justify-center gap-2 w-full py-2.5 rounded-xl font-semibold text-sm transition-all",
+                      isResearching === selectedTask.id
+                        ? "bg-cyan-100 text-cyan-600 cursor-wait"
+                        : "bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:from-cyan-600 hover:to-blue-600 shadow-md hover:shadow-lg"
+                    )}
+                  >
+                    {isResearching === selectedTask.id ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[18px]">science</span>
+                        Research This Task
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {/* Due Date */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Category</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Due Date</label>
+                  <input
+                    type="date"
+                    value={selectedTask.dueDate || ''}
+                    onChange={(e) => handleUpdateTask(selectedTask.id, { dueDate: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 outline-none"
+                    disabled={isDemo}
+                  />
+                </div>
+
+                {/* Priority */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Priority</label>
+                  <div className="flex gap-2">
+                    {(['high', 'medium', 'low'] as const).map(p => {
+                      const info = getPriorityInfo(p)
+                      const isActive = selectedTask.priority === p
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => handleUpdateTask(selectedTask.id, { priority: p })}
+                          className={cn(
+                            "flex-1 py-2 text-[10px] font-bold uppercase tracking-wide rounded-lg transition-all",
+                            isActive
+                              ? cn(info.bg, info.color, info.border, "ring-2 ring-offset-1", p === 'high' ? "ring-orange-300" : p === 'medium' ? "ring-orange-200" : "ring-blue-200")
+                              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                          )}
+                        >
+                          {info.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Project */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Project</label>
                   <select
                     value={selectedTask.category_id || ''}
                     onChange={(e) => handleMoveToCategory(selectedTask.id, e.target.value || null)}
-                    className="w-full px-4 py-3 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 hover:border-cyan-300 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-cyan-200 appearance-none cursor-pointer shadow-sm transition-all outline-none"
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 outline-none appearance-none cursor-pointer"
                     disabled={isDemo}
                   >
                     <option value="">Uncategorized</option>
@@ -1150,95 +1194,43 @@ export default function TodayPage() {
                   </select>
                 </div>
 
-                {/* Priority */}
+                {/* Tags */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Priority</label>
-                  <div className="flex bg-slate-100 rounded-xl p-1.5 shadow-inner">
-                    {(['low', 'medium', 'high'] as const).map(p => (
-                      <button
-                        key={p}
-                        onClick={() => handleUpdateTask(selectedTask.id, { priority: p })}
-                        className={cn(
-                          'flex-1 py-2 text-xs font-semibold rounded-lg transition-all capitalize',
-                          selectedTask.priority === p
-                            ? p === 'high'
-                              ? 'bg-white text-orange-600 shadow-sm border border-slate-100 ring-1 ring-black/5'
-                              : p === 'medium'
-                              ? 'bg-white text-cyan-600 shadow-sm border border-slate-100 ring-1 ring-black/5'
-                              : 'bg-white text-slate-700 shadow-sm border border-slate-100 ring-1 ring-black/5'
-                            : 'text-slate-500 hover:text-slate-700 hover:bg-white/50'
-                        )}
-                      >
-                        {p === 'medium' ? 'Med' : p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Due Date */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Due Date</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={selectedTask.dueDate || ''}
-                      onChange={(e) => handleUpdateTask(selectedTask.id, { dueDate: e.target.value })}
-                      className="flex-1 px-4 py-3 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 hover:border-cyan-300 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-cyan-200 appearance-none cursor-pointer shadow-sm transition-all outline-none"
-                      disabled={isDemo}
-                    />
-                  </div>
-                  {/* Quick date buttons */}
-                  <div className="flex gap-2 flex-wrap">
-                    {getQuickDateOptions().map(option => (
-                      <button
-                        key={option.value}
-                        onClick={() => handleUpdateTask(selectedTask.id, { dueDate: option.value })}
-                        disabled={isDemo}
-                        className={cn(
-                          "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                          selectedTask.dueDate === option.value
-                            ? "bg-cyan-100 text-cyan-700"
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        )}
-                      >
-                        {option.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Due Time */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Due Time (Optional)</label>
-                  <div className="flex gap-2 items-center">
-                    <input
-                      type="time"
-                      value={selectedTask.dueTime || ''}
-                      onChange={(e) => handleUpdateTask(selectedTask.id, { dueTime: e.target.value })}
-                      className="flex-1 px-4 py-3 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 hover:border-cyan-300 text-sm font-medium text-slate-700 focus:ring-2 focus:ring-cyan-200 cursor-pointer shadow-sm transition-all outline-none"
-                      disabled={isDemo}
-                    />
-                    {selectedTask.dueTime && (
-                      <button
-                        onClick={() => handleUpdateTask(selectedTask.id, { dueTime: '' })}
-                        className="p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
-                        disabled={isDemo}
-                      >
-                        <span className="material-symbols-outlined text-[18px]">close</span>
-                      </button>
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Tags</label>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTask.priority === 'high' && (
+                      <span className="px-2 py-1 bg-red-50 text-red-600 rounded-md text-xs font-medium">urgent</span>
                     )}
+                    {categories.find(c => c.id === selectedTask.category_id)?.is_recurring && (
+                      <span className="px-2 py-1 bg-purple-50 text-purple-600 rounded-md text-xs font-medium">recurring</span>
+                    )}
+                    <button className="px-2 py-1 bg-slate-100 text-slate-500 rounded-md text-xs font-medium hover:bg-slate-200 transition-colors">
+                      + Add tag
+                    </button>
                   </div>
                 </div>
 
-                {/* Notes */}
-                <div className="flex-1 flex flex-col gap-2 min-h-[150px]">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wide">Notes</label>
+                {/* Description */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Description</label>
                   <textarea
-                    className="flex-1 bg-white rounded-xl border border-slate-200 p-4 text-sm text-slate-700 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-600 resize-none placeholder:text-slate-400 leading-relaxed outline-none shadow-sm"
-                    placeholder="Add notes..."
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 resize-none outline-none leading-relaxed"
+                    placeholder="Add a description..."
+                    rows={4}
                     value={selectedTask.notes || ''}
                     onChange={(e) => handleUpdateTask(selectedTask.id, { notes: e.target.value })}
                   />
+                </div>
+
+                {/* Subtasks Preview */}
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Subtasks</label>
+                    <span className="text-xs text-slate-400">0/0</span>
+                  </div>
+                  <button className="w-full py-2.5 text-sm text-slate-500 bg-slate-50 border border-dashed border-slate-200 rounded-xl hover:bg-slate-100 hover:text-slate-700 transition-colors">
+                    + Add subtask
+                  </button>
                 </div>
 
                 {/* Linked Notes */}
@@ -1249,16 +1241,22 @@ export default function TodayPage() {
                 />
               </div>
             </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center p-6 text-slate-400">
-            <div className="text-center">
-              <span className="material-symbols-outlined text-6xl mb-4 block">task_alt</span>
-              <p className="text-sm font-medium">Select a task to view details</p>
+
+            {/* Sidebar Footer */}
+            <div className="shrink-0 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
+              <span className="text-xs text-slate-400">
+                Created {selectedTask.dueDate ? format(new Date(selectedTask.dueDate), 'MMM d, yyyy') : 'Today'}
+              </span>
+              <button
+                onClick={() => handleDeleteTask(selectedTask.id)}
+                className="flex items-center gap-1 px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-xs font-medium transition-colors"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete</span>
+                Delete
+              </button>
             </div>
-          </div>
-        )}
-      </aside>
+        </aside>
+      )}
 
       {/* Category Modal */}
       {showCategoryModal && (
@@ -1268,7 +1266,7 @@ export default function TodayPage() {
             className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
           >
             <h3 className="text-lg font-bold text-slate-900 mb-4">
-              {editingCategory ? 'Edit Category' : 'New Category'}
+              {editingCategory ? 'Edit Folder' : 'New Folder'}
             </h3>
 
             <div className="flex flex-col gap-4">
@@ -1281,8 +1279,8 @@ export default function TodayPage() {
                   type="text"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="Category name"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                  placeholder="Folder name"
+                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none"
                 />
               </div>
 
@@ -1339,11 +1337,11 @@ export default function TodayPage() {
                   className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
                 />
                 <label htmlFor="isRecurring" className="text-sm text-slate-700">
-                  Daily recurring tasks (tasks repeat every day)
+                  Daily recurring tasks
                 </label>
               </div>
 
-              {/* Research Automation - only show if research is enabled */}
+              {/* Research Automation */}
               {researchEnabled && (
                 <div className="border-t border-slate-200 pt-4 mt-2">
                   <div className="flex items-center gap-2 mb-3">
@@ -1353,7 +1351,6 @@ export default function TodayPage() {
                     </span>
                   </div>
 
-                  {/* Enable Automation Toggle */}
                   <div className="flex items-center gap-3 mb-4">
                     <input
                       type="checkbox"
@@ -1363,14 +1360,12 @@ export default function TodayPage() {
                       className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
                     />
                     <label htmlFor="enableAutomation" className="text-sm text-slate-700">
-                      Auto-research new tasks in this category
+                      Auto-research new tasks
                     </label>
                   </div>
 
-                  {/* Automation Settings - only show if enabled */}
                   {enableAutomation && (
                     <div className="space-y-3 pl-7 border-l-2 border-cyan-100">
-                      {/* Research Depth */}
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">
                           Research Depth
@@ -1394,7 +1389,6 @@ export default function TodayPage() {
                         </div>
                       </div>
 
-                      {/* Max Sources */}
                       <div>
                         <label className="text-xs font-medium text-slate-600 mb-1 block">
                           Max Sources: {automationMaxSources}
@@ -1409,7 +1403,6 @@ export default function TodayPage() {
                         />
                       </div>
 
-                      {/* Ask Clarification */}
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
@@ -1441,7 +1434,7 @@ export default function TodayPage() {
                 disabled={isSaving || !newCategoryName.trim()}
                 className="px-4 py-2 bg-cyan-600 text-white rounded-xl font-medium hover:bg-cyan-700 transition-colors disabled:opacity-50"
               >
-                {isSaving ? 'Saving...' : editingCategory ? 'Save Changes' : 'Create Category'}
+                {isSaving ? 'Saving...' : editingCategory ? 'Save Changes' : 'Create Folder'}
               </button>
             </div>
           </div>
