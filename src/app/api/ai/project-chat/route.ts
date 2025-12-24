@@ -6,8 +6,8 @@
  * Supports AI tools for creating tasks, updating task status, creating notes, and searching.
  */
 
-import { streamText, convertToModelMessages, UIMessage, tool } from 'ai'
-import { google } from '@ai-sdk/google'
+import { streamText, convertToModelMessages, UIMessage, tool, stepCountIs } from 'ai'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAIProvider, type AIProviderType } from '@/lib/ai/providers'
@@ -16,6 +16,9 @@ import type { ProjectWithLinkedItems } from '@/types/projects'
 
 export const runtime = 'nodejs'
 export const maxDuration = 120 // Allow longer for comprehensive responses
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SupabaseClient = any
 
 interface ProjectChatRequest {
   projectId: string
@@ -28,7 +31,7 @@ interface ProjectChatRequest {
  * Load complete project data with all linked items
  */
 async function loadProjectWithContext(
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+  supabase: SupabaseClient,
   projectId: string,
   userId: string
 ): Promise<ProjectWithLinkedItems | null> {
@@ -221,7 +224,7 @@ async function loadProjectWithContext(
  * Create a task and link it to the current project
  */
 async function executeCreateTask(
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+  supabase: SupabaseClient,
   userId: string,
   projectId: string,
   params: { title: string; priority?: string; dueDate?: string; notes?: string }
@@ -279,7 +282,7 @@ async function executeCreateTask(
  * Update task completion status
  */
 async function executeUpdateTaskStatus(
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+  supabase: SupabaseClient,
   taskId: string,
   completed: boolean
 ) {
@@ -314,7 +317,7 @@ async function executeUpdateTaskStatus(
  * Create a note and link it to the current project
  */
 async function executeCreateNote(
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+  supabase: SupabaseClient,
   userId: string,
   projectId: string,
   params: { title: string; content: string }
@@ -380,7 +383,7 @@ async function executeCreateNote(
  * Search across project content (tasks, notes)
  */
 async function executeSearchContent(
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+  supabase: SupabaseClient,
   projectId: string,
   query: string
 ) {
@@ -498,7 +501,7 @@ async function executeSearchContent(
  * Note: Using simple required parameters to ensure Gemini API compatibility
  */
 function buildProjectTools(
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+  supabase: SupabaseClient,
   userId: string,
   projectId: string
 ) {
@@ -641,9 +644,8 @@ export async function POST(request: Request) {
     }
 
     // Create Google Gemini model - using gemini-2.0-flash for fast responses
-    const aiModel = google('gemini-2.0-flash', {
-      apiKey: geminiApiKey,
-    })
+    const google = createGoogleGenerativeAI({ apiKey: geminiApiKey })
+    const aiModel = google('gemini-2.0-flash')
 
     // Build AI tools with project context
     const projectTools = buildProjectTools(supabase, user.id, projectId)
@@ -657,7 +659,7 @@ export async function POST(request: Request) {
       system: systemPrompt,
       messages: modelMessages,
       tools: projectTools,
-      maxSteps: 5, // Allow up to 5 tool calls per request
+      stopWhen: stepCountIs(5), // Allow up to 5 tool calls per request
       onError({ error }) {
         console.error('Project AI Stream error:', error)
       },

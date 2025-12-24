@@ -527,7 +527,7 @@ export default function ProjectAIChat({ projectId, projectName, className }: Pro
                         .map((part, idx) => (
                           <ToolInvocationDisplay
                             key={idx}
-                            part={part as { type: 'tool-invocation'; toolInvocation: { toolName: string; state: string; result?: unknown } }}
+                            part={part as unknown as { type: 'tool-invocation'; toolInvocation: { toolName: string; state: string; result?: unknown } }}
                           />
                         ))
                       }
