@@ -19,11 +19,12 @@ import Typography from '@tiptap/extension-typography'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { DragHandle } from '@tiptap/extension-drag-handle'
 import { common, createLowlight } from 'lowlight'
-import { useCallback, useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import { cn } from '@/lib/utils'
 import { EditorToolbar } from './EditorToolbar'
 import { LinkEditorModal } from './LinkEditorModal'
 import { Columns, Column } from './extensions/ColumnsExtension'
+import { markdownToTiptap } from '@/lib/markdownToTiptap'
 
 const lowlight = createLowlight(common)
 
@@ -111,6 +112,228 @@ const EDITOR_EXTENSIONS = [
   Column,
 ]
 
+/**
+ * Check if a table is malformed and needs re-parsing
+ * Malformed tables have: all cells as headers, or single row with many cells
+ */
+function isTableMalformed(tableNode: Record<string, unknown>): boolean {
+  if (!Array.isArray(tableNode.content)) return false
+
+  const rows = tableNode.content as unknown[]
+  if (rows.length === 0) return false
+
+  // Check if there's only one row with many cells (all merged into one row)
+  if (rows.length === 1) {
+    const row = rows[0] as Record<string, unknown>
+    if (Array.isArray(row.content) && row.content.length > 4) {
+      // Single row with more than 4 cells is likely malformed
+      return true
+    }
+  }
+
+  // Check if all rows have only header cells (no regular cells)
+  let hasRegularCells = false
+  for (const row of rows) {
+    const r = row as Record<string, unknown>
+    if (Array.isArray(r.content)) {
+      for (const cell of r.content as unknown[]) {
+        const c = cell as Record<string, unknown>
+        if (c.type === 'tableCell') {
+          hasRegularCells = true
+          break
+        }
+      }
+    }
+    if (hasRegularCells) break
+  }
+
+  // If there are multiple rows but no regular cells, table is malformed
+  if (rows.length > 1 && !hasRegularCells) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * Check if content contains raw markdown that needs parsing
+ * Looks for common markdown patterns in paragraph text nodes, codeBlock nodes, or malformed tables
+ */
+function contentNeedsMarkdownParsing(content: Record<string, unknown>): boolean {
+  if (content.type !== 'doc' || !Array.isArray(content.content)) {
+    return false
+  }
+
+  // First check for malformed tables
+  for (const node of content.content as unknown[]) {
+    const n = node as Record<string, unknown>
+    if (n.type === 'table' && isTableMalformed(n)) {
+      return true
+    }
+  }
+
+  // Extract all text from paragraph and codeBlock nodes
+  const extractText = (nodes: unknown[]): string => {
+    let text = ''
+    for (const node of nodes) {
+      const n = node as Record<string, unknown>
+      if (n.type === 'paragraph' && Array.isArray(n.content)) {
+        for (const child of n.content) {
+          const c = child as Record<string, unknown>
+          if (c.type === 'text' && typeof c.text === 'string') {
+            text += c.text + '\n'
+          }
+        }
+      } else if (n.type === 'codeBlock' && Array.isArray(n.content)) {
+        // Also check codeBlock nodes - tables may have been stored as code blocks
+        for (const child of n.content) {
+          const c = child as Record<string, unknown>
+          if (c.type === 'text' && typeof c.text === 'string') {
+            text += c.text + '\n'
+          }
+        }
+      }
+    }
+    return text
+  }
+
+  const text = extractText(content.content as unknown[])
+
+  // Check for markdown patterns - if we find these in raw text, it needs parsing
+  const markdownPatterns = [
+    /^#{1,6}\s+/m,           // Headings: # ## ### etc.
+    /\*\*[^*]+\*\*/,         // Bold: **text**
+    /\[\[[^\]]+\]\]/,        // Wiki links: [[link]]
+    /\[[^\]]+\]\([^)]+\)/,   // Links: [text](url)
+    /^>\s+/m,                // Blockquotes: > text
+    /^-{3,}$/m,              // Horizontal rules: ---
+    /^[-*+]\s+/m,            // Unordered lists: - item
+    /^\d+\.\s+/m,            // Ordered lists: 1. item
+    /```[\s\S]*```/,         // Code blocks: ```code```
+    /^\|.+\|$/m,             // Tables: | cell | cell |
+    /^\|[\s\-:]+\|$/m,       // Table separator: |---|---|
+  ]
+
+  // If multiple patterns match, it's likely raw markdown
+  let matchCount = 0
+  for (const pattern of markdownPatterns) {
+    if (pattern.test(text)) {
+      matchCount++
+      if (matchCount >= 2) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+/**
+ * Extract text from a TipTap node recursively
+ */
+function extractTextFromNode(node: Record<string, unknown>): string {
+  if (node.type === 'text' && typeof node.text === 'string') {
+    return node.text
+  }
+  if (Array.isArray(node.content)) {
+    return (node.content as unknown[]).map(child =>
+      extractTextFromNode(child as Record<string, unknown>)
+    ).join('')
+  }
+  return ''
+}
+
+/**
+ * Extract raw text from TipTap content for markdown parsing
+ * Includes text from paragraphs, codeBlocks, tables, and other nodes
+ */
+function extractTextFromTiptap(content: Record<string, unknown>): string {
+  if (!Array.isArray(content.content)) {
+    return ''
+  }
+
+  const lines: string[] = []
+
+  for (const node of content.content as unknown[]) {
+    const n = node as Record<string, unknown>
+    if (n.type === 'paragraph' && Array.isArray(n.content)) {
+      let lineText = ''
+      for (const child of n.content) {
+        const c = child as Record<string, unknown>
+        if (c.type === 'text' && typeof c.text === 'string') {
+          lineText += c.text
+        }
+      }
+      lines.push(lineText)
+    } else if (n.type === 'paragraph') {
+      lines.push('') // Empty paragraph
+    } else if (n.type === 'codeBlock' && Array.isArray(n.content)) {
+      // Extract from codeBlocks - tables may have been stored as code
+      for (const child of n.content) {
+        const c = child as Record<string, unknown>
+        if (c.type === 'text' && typeof c.text === 'string') {
+          // Split code block text by newlines and add each line
+          const codeLines = c.text.split('\n')
+          lines.push(...codeLines)
+        }
+      }
+    } else if (n.type === 'heading' && Array.isArray(n.content)) {
+      // Preserve headings by adding markdown syntax back
+      let headingText = ''
+      for (const child of n.content) {
+        const c = child as Record<string, unknown>
+        if (c.type === 'text' && typeof c.text === 'string') {
+          headingText += c.text
+        }
+      }
+      const level = (n.attrs as Record<string, unknown>)?.level || 1
+      lines.push('#'.repeat(level as number) + ' ' + headingText)
+    } else if (n.type === 'table' && Array.isArray(n.content)) {
+      // Convert table back to markdown format for re-parsing
+      const tableRows: string[] = []
+      let headerRowCount = 0
+
+      for (const row of n.content as unknown[]) {
+        const r = row as Record<string, unknown>
+        if (r.type === 'tableRow' && Array.isArray(r.content)) {
+          const cells: string[] = []
+          let isHeaderRow = false
+
+          for (const cell of r.content as unknown[]) {
+            const c = cell as Record<string, unknown>
+            if (c.type === 'tableHeader') {
+              isHeaderRow = true
+            }
+            // Extract text from cell content
+            const cellText = extractTextFromNode(c)
+            cells.push(cellText)
+          }
+
+          if (cells.length > 0) {
+            tableRows.push('| ' + cells.join(' | ') + ' |')
+            if (isHeaderRow) {
+              headerRowCount++
+            }
+          }
+        }
+      }
+
+      // Add separator after header rows
+      if (tableRows.length > 0 && headerRowCount > 0) {
+        const firstRow = tableRows[0]
+        const cellCount = (firstRow.match(/\|/g) || []).length - 1
+        const separator = '| ' + Array(cellCount).fill('---').join(' | ') + ' |'
+        // Insert separator after the last header row
+        tableRows.splice(headerRowCount, 0, separator)
+      }
+
+      lines.push(...tableRows)
+    }
+  }
+
+  return lines.join('\n')
+}
+
 // Helper to validate and normalize TipTap content
 function normalizeContent(content: string | object): object | string {
   if (typeof content === 'string') {
@@ -128,6 +351,15 @@ function normalizeContent(content: string | object): object | string {
     return DEFAULT_CONTENT
   }
 
+  // Check if content contains raw markdown that needs parsing
+  if (contentNeedsMarkdownParsing(contentObj)) {
+    const rawText = extractTextFromTiptap(contentObj)
+    if (rawText.trim()) {
+      // Convert markdown to proper TipTap structure
+      return markdownToTiptap(rawText)
+    }
+  }
+
   return content
 }
 
@@ -140,14 +372,19 @@ interface NotesEditorProps {
   onImageUpload?: (file: File) => Promise<string | null>
 }
 
-export function NotesEditor({
+export interface NotesEditorHandle {
+  insertContent: (text: string) => void
+  focus: () => void
+}
+
+export const NotesEditor = forwardRef<NotesEditorHandle, NotesEditorProps>(function NotesEditor({
   content,
   onUpdate,
   placeholder = 'Start writing...',
   editable = true,
   className,
   onImageUpload,
-}: NotesEditorProps) {
+}, ref) {
   const [linkModalOpen, setLinkModalOpen] = useState(false)
   const [currentLink, setCurrentLink] = useState({ url: '', text: '' })
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -214,6 +451,25 @@ export function NotesEditor({
       },
     },
   })
+
+  // Expose imperative methods via ref
+  useImperativeHandle(ref, () => ({
+    insertContent: (text: string) => {
+      if (!editor) return
+      // Move cursor to end and insert content with a blank line before
+      editor
+        .chain()
+        .focus('end')
+        .insertContent([
+          { type: 'paragraph' },
+          { type: 'paragraph', content: [{ type: 'text', text }] },
+        ])
+        .run()
+    },
+    focus: () => {
+      editor?.commands.focus()
+    },
+  }), [editor])
 
   // Sync content when it changes externally
   useEffect(() => {
@@ -325,4 +581,4 @@ export function NotesEditor({
       />
     </div>
   )
-}
+})

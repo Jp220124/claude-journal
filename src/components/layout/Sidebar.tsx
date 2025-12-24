@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
-import { isDemoAccount, demoSidebarData } from '@/lib/demo'
+import { ThemeToggleCompact } from '@/components/ThemeToggle'
 
 interface SidebarProps {
   isOpen?: boolean
@@ -16,6 +16,7 @@ interface SidebarProps {
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { href: '/today', label: 'Today', icon: 'check_box' },
+  { href: '/projects', label: 'Projects', icon: 'rocket_launch' },
   { href: '/journal', label: 'Journal', icon: 'book' },
   { href: '/notes', label: 'Notes', icon: 'edit_note' },
   { href: '/research', label: 'Research', icon: 'science' },
@@ -28,11 +29,6 @@ const navItems = [
 export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname()
   const { user, signOut } = useAuthStore()
-  const isDemo = isDemoAccount(user?.email)
-
-  // Get streak data based on demo status
-  const streakDays = isDemo ? demoSidebarData.streak : 0
-  const streakProgress = isDemo ? demoSidebarData.streakProgress : 0
 
   const handleSignOut = async () => {
     await signOut()
@@ -52,11 +48,28 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed top-0 left-0 z-50 h-screen bg-white border-r border-slate-200 transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:z-0 flex flex-col justify-between shadow-sm',
+          'fixed top-0 left-0 z-50 h-screen bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 transition-all duration-300 ease-in-out lg:translate-x-0 lg:relative lg:z-10 flex flex-col justify-between shadow-sm dark:shadow-none overflow-visible',
           isOpen ? 'translate-x-0' : '-translate-x-full',
           isCollapsed ? 'w-20 p-4' : 'w-72 p-6'
         )}
       >
+        {/* Collapse/Expand Toggle - Half circle on right edge */}
+        <button
+          onClick={onToggleCollapse}
+          className="hidden lg:flex absolute top-24 right-0 translate-x-full w-5 h-10 items-center justify-center bg-zinc-800 dark:bg-zinc-800 border border-zinc-700 dark:border-zinc-600 border-l-0 rounded-r-full hover:bg-zinc-700 dark:hover:bg-zinc-700 transition-all z-50"
+          title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          <span
+            className="material-symbols-outlined text-zinc-400 transition-transform duration-300"
+            style={{
+              fontSize: '14px',
+              transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)'
+            }}
+          >
+            chevron_left
+          </span>
+        </button>
+
         <div className="flex flex-col gap-8">
           {/* User Profile Header */}
           <div className={cn(
@@ -65,7 +78,7 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
           )}>
             <div
               className={cn(
-                "bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full ring-2 ring-slate-200 flex items-center justify-center text-white font-bold flex-shrink-0 transition-all duration-300",
+                "bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-full ring-2 ring-zinc-200 dark:ring-zinc-700 flex items-center justify-center text-white font-bold flex-shrink-0 transition-all duration-300",
                 isCollapsed ? "w-10 h-10 text-sm" : "w-12 h-12 text-lg"
               )}
             >
@@ -73,8 +86,8 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
             </div>
             {!isCollapsed && (
               <div className="flex flex-col min-w-0">
-                <h1 className="text-slate-900 text-lg font-bold leading-tight truncate">My Journal</h1>
-                <p className="text-slate-500 text-xs font-normal">Daily Planner</p>
+                <h1 className="text-zinc-900 dark:text-zinc-100 text-lg font-bold leading-tight truncate">My Journal</h1>
+                <p className="text-zinc-500 dark:text-zinc-400 text-xs font-normal">Daily Planner</p>
               </div>
             )}
           </div>
@@ -82,7 +95,7 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
           {/* Mobile close button */}
           <button
             onClick={onClose}
-            className="lg:hidden absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-lg"
+            className="lg:hidden absolute top-4 right-4 p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400"
           >
             <span className="material-symbols-outlined">close</span>
           </button>
@@ -102,14 +115,14 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
                     'group flex items-center rounded-xl transition-all',
                     isCollapsed ? 'justify-center px-3 py-3' : 'gap-3 px-4 py-3',
                     isActive
-                      ? 'bg-cyan-50 border border-cyan-200/50 text-cyan-600'
-                      : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                      ? 'bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-500/20 dark:border-cyan-500/30 text-cyan-600 dark:text-cyan-400'
+                      : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100'
                   )}
                 >
                   <span
                     className={cn(
                       "material-symbols-outlined flex-shrink-0",
-                      isActive ? "text-cyan-600" : ""
+                      isActive ? "text-cyan-600 dark:text-cyan-400" : ""
                     )}
                     style={{ fontSize: '24px' }}
                   >
@@ -127,83 +140,26 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
               )
             })}
           </nav>
-
-          {/* Streak Card */}
-          {!isCollapsed ? (
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <div className="flex items-center gap-2 mb-3">
-                <span className={cn(
-                  "material-symbols-outlined",
-                  streakDays > 0 ? "text-orange-500" : "text-slate-400"
-                )} style={{ fontSize: '20px' }}>
-                  local_fire_department
-                </span>
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Current Streak
-                </span>
-              </div>
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-bold text-slate-900">{streakDays}</span>
-                <span className="text-sm text-slate-500">{streakDays === 1 ? 'day' : 'days'}</span>
-              </div>
-              <div className="mt-2 h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                <div
-                  className={cn(
-                    "h-full rounded-full transition-all",
-                    streakDays > 0 ? "bg-orange-400" : "bg-slate-300"
-                  )}
-                  style={{ width: `${streakProgress}%` }}
-                ></div>
-              </div>
-              {streakDays === 0 && (
-                <p className="text-xs text-slate-400 mt-2">Start journaling to build your streak!</p>
-              )}
-            </div>
-          ) : (
-            <div
-              className="flex justify-center p-3 rounded-xl bg-slate-50 border border-slate-200"
-              title={`${streakDays} day streak`}
-            >
-              <div className="flex flex-col items-center">
-                <span className={cn(
-                  "material-symbols-outlined",
-                  streakDays > 0 ? "text-orange-500" : "text-slate-400"
-                )} style={{ fontSize: '20px' }}>
-                  local_fire_department
-                </span>
-                <span className="text-sm font-bold text-slate-900 mt-1">{streakDays}</span>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Bottom Section */}
-        <div className="flex flex-col gap-2">
-          {/* Collapse Toggle Button - Desktop only */}
-          <button
-            onClick={onToggleCollapse}
-            className="hidden lg:flex items-center justify-center px-3 py-3 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors"
-            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <span
-              className="material-symbols-outlined transition-transform duration-300"
-              style={{
-                fontSize: '24px',
-                transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)'
-              }}
-            >
-              chevron_left
-            </span>
+        <div className="flex flex-col gap-2 pt-4 border-t border-zinc-200 dark:border-zinc-700/50">
+          {/* Theme Toggle */}
+          <div className={cn(
+            "flex items-center rounded-xl transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800",
+            isCollapsed ? "justify-center px-3 py-3" : "gap-3 px-4 py-3"
+          )}>
             {!isCollapsed && (
-              <span className="text-sm font-medium ml-2">Collapse</span>
+              <span className="text-sm font-medium text-zinc-600 dark:text-zinc-300">Theme</span>
             )}
-          </button>
+            <ThemeToggleCompact className={isCollapsed ? "" : "ml-auto"} />
+          </div>
 
           <Link
             href="/settings"
             title={isCollapsed ? 'Settings' : undefined}
             className={cn(
-              "flex items-center rounded-xl text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors",
+              "flex items-center rounded-xl text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors",
               isCollapsed ? "justify-center px-3 py-3" : "gap-3 px-4 py-3"
             )}
           >
@@ -217,7 +173,7 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
             onClick={handleSignOut}
             title={isCollapsed ? 'Sign Out' : undefined}
             className={cn(
-              "flex items-center rounded-xl text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors w-full",
+              "flex items-center rounded-xl text-zinc-500 dark:text-zinc-400 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors w-full",
               isCollapsed ? "justify-center px-3 py-3" : "gap-3 px-4 py-3"
             )}
           >

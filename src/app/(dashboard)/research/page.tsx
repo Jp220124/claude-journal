@@ -43,6 +43,7 @@ export default function ResearchPage() {
 
   const [isLoading, setIsLoading] = useState(true)
   const [researchEnabled, setResearchEnabled] = useState(false)
+  const [researchColdStart, setResearchColdStart] = useState(false)
   const [jobs, setJobs] = useState<ResearchJob[]>([])
   const [selectedJob, setSelectedJob] = useState<ResearchJob | null>(null)
   const [quota, setQuota] = useState({ jobs_today: 0, max_jobs_per_day: 10, total_jobs_all_time: 0 })
@@ -65,6 +66,16 @@ export default function ResearchPage() {
       // Check if research is enabled
       const status = await getResearchStatus()
       setResearchEnabled(status.enabled)
+
+      // Handle cold start scenario
+      if (status.coldStart) {
+        setResearchColdStart(true)
+        setError('Research service is waking up. This may take up to a minute. Please refresh the page.')
+        setIsLoading(false)
+        return
+      } else {
+        setResearchColdStart(false)
+      }
 
       if (!status.enabled) {
         setIsLoading(false)
@@ -188,7 +199,7 @@ export default function ResearchPage() {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-slate-50 dark:bg-slate-900">
+    <div className="flex h-full overflow-hidden bg-slate-50 dark:bg-transparent">
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto p-4 md:p-8">
         <div className="max-w-6xl mx-auto space-y-8">
@@ -222,14 +233,44 @@ export default function ResearchPage() {
             </div>
           </div>
 
-          {/* Error Banner */}
+          {/* Error/Warning Banner */}
           {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3">
-              <span className="material-symbols-outlined text-red-500">error</span>
-              <div>
-                <p className="font-medium text-red-800 dark:text-red-200">Error</p>
-                <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
+            <div className={cn(
+              "rounded-xl p-4 flex items-start gap-3",
+              researchColdStart
+                ? "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800"
+                : "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+            )}>
+              <span className={cn(
+                "material-symbols-outlined",
+                researchColdStart ? "text-amber-500 animate-pulse" : "text-red-500"
+              )}>
+                {researchColdStart ? "schedule" : "error"}
+              </span>
+              <div className="flex-1">
+                <p className={cn(
+                  "font-medium",
+                  researchColdStart
+                    ? "text-amber-800 dark:text-amber-200"
+                    : "text-red-800 dark:text-red-200"
+                )}>
+                  {researchColdStart ? "Service Starting Up" : "Error"}
+                </p>
+                <p className={cn(
+                  "text-sm",
+                  researchColdStart
+                    ? "text-amber-600 dark:text-amber-300"
+                    : "text-red-600 dark:text-red-300"
+                )}>{error}</p>
               </div>
+              {researchColdStart && (
+                <button
+                  onClick={loadData}
+                  className="px-3 py-1.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 rounded-lg text-sm font-medium hover:bg-amber-200 dark:hover:bg-amber-800/50 transition-colors"
+                >
+                  Retry
+                </button>
+              )}
             </div>
           )}
 

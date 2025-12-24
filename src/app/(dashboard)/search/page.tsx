@@ -72,12 +72,12 @@ export default function SearchPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-slate-50">
+    <div className="min-h-full flex-1 overflow-y-auto bg-slate-50 dark:bg-transparent">
       <div className="max-w-[1000px] w-full mx-auto px-6 md:px-12 py-8 flex flex-col gap-8">
         {/* Header */}
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900">Search Archives</h1>
-          <p className="text-slate-500 text-base md:text-lg">Find past thoughts, reflections, and completed tasks</p>
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">Search Archives</h1>
+          <p className="text-slate-500 dark:text-zinc-400 text-base md:text-lg">Find past thoughts, reflections, and completed tasks</p>
         </div>
 
         {/* Search Input */}

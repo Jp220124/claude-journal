@@ -100,7 +100,7 @@ function JournalEntryContent() {
     content: '',
     editorProps: {
       attributes: {
-        class: 'prose prose-lg prose-slate max-w-none focus:outline-none min-h-[300px] text-slate-700 leading-relaxed',
+        class: 'prose prose-lg prose-slate dark:prose-invert max-w-none focus:outline-none min-h-[300px] text-slate-700 dark:text-zinc-300 leading-relaxed',
       },
       handlePaste: (view, event) => {
         const items = event.clipboardData?.items
@@ -420,13 +420,13 @@ function JournalEntryContent() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-slate-50">
+    <div className="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-transparent">
       {/* Header */}
-      <header className="flex items-center justify-between whitespace-nowrap border-b border-slate-200 px-6 py-4 bg-white/90 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
+      <header className="flex items-center justify-between whitespace-nowrap border-b border-slate-200 dark:border-zinc-700 px-6 py-4 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-4">
           <Link
             href="/dashboard"
-            className="flex items-center justify-center p-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+            className="flex items-center justify-center p-2 rounded-lg text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
           >
             <span className="material-symbols-outlined">arrow_back</span>
           </Link>
@@ -435,7 +435,7 @@ function JournalEntryContent() {
           <div className="flex items-center gap-2">
             <button
               onClick={goToPreviousDay}
-              className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+              className="p-1.5 rounded-lg text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
               title="Previous day"
             >
               <span className="material-symbols-outlined text-[20px]">chevron_left</span>
@@ -444,23 +444,23 @@ function JournalEntryContent() {
             <div className="relative" ref={datePickerRef}>
               <button
                 onClick={() => setShowDatePicker(!showDatePicker)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors"
               >
-                <span className="material-symbols-outlined text-cyan-600 text-[20px]">calendar_today</span>
-                <h2 className="text-base font-bold leading-tight tracking-tight text-slate-900">
+                <span className="material-symbols-outlined text-cyan-600 dark:text-cyan-400 text-[20px]">calendar_today</span>
+                <h2 className="text-base font-bold leading-tight tracking-tight text-slate-900 dark:text-white">
                   {format(selectedDate, 'EEEE, MMMM do, yyyy')}
                 </h2>
-                <span className="material-symbols-outlined text-slate-400 text-[18px]">expand_more</span>
+                <span className="material-symbols-outlined text-slate-400 dark:text-zinc-500 text-[18px]">expand_more</span>
               </button>
 
               {/* Date Picker Dropdown */}
               {showDatePicker && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-200 p-4 z-50 min-w-[280px]">
+                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-slate-200 dark:border-zinc-700 p-4 z-50 min-w-[280px]">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-bold text-slate-900">Select Date</h3>
+                    <h3 className="font-bold text-slate-900 dark:text-white">Select Date</h3>
                     <button
                       onClick={goToToday}
-                      className="text-xs font-bold text-cyan-600 hover:text-cyan-700"
+                      className="text-xs font-bold text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300"
                     >
                       Today
                     </button>
@@ -475,9 +475,9 @@ function JournalEntryContent() {
                         setShowDatePicker(false)
                       }
                     }}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-cyan-600 focus:border-cyan-600 outline-none"
+                    className="w-full px-3 py-2 border border-slate-200 dark:border-zinc-600 dark:bg-zinc-700 dark:text-white rounded-lg focus:ring-2 focus:ring-cyan-600 focus:border-cyan-600 outline-none"
                   />
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-2">
                     View and edit entries from any past date
                   </p>
                 </div>
@@ -489,8 +489,8 @@ function JournalEntryContent() {
               disabled={!canGoNext}
               className={`p-1.5 rounded-lg transition-colors ${
                 canGoNext
-                  ? 'text-slate-500 hover:bg-slate-100'
-                  : 'text-slate-300 cursor-not-allowed'
+                  ? 'text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-800'
+                  : 'text-slate-300 dark:text-zinc-600 cursor-not-allowed'
               }`}
               title="Next day"
             >
@@ -500,7 +500,7 @@ function JournalEntryContent() {
             {!isCurrentDay && (
               <button
                 onClick={goToToday}
-                className="ml-2 px-3 py-1 text-xs font-bold text-cyan-600 bg-cyan-50 rounded-full hover:bg-cyan-100 transition-colors"
+                className="ml-2 px-3 py-1 text-xs font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30 rounded-full hover:bg-cyan-100 dark:hover:bg-cyan-900/50 transition-colors"
               >
                 Go to Today
               </button>
@@ -515,8 +515,8 @@ function JournalEntryContent() {
                 className={cn(
                   'flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors',
                   selectedTemplate
-                    ? 'border-cyan-200 bg-cyan-50 text-cyan-700'
-                    : 'border-slate-200 hover:border-slate-300 text-slate-600'
+                    ? 'border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400'
+                    : 'border-slate-200 dark:border-zinc-700 hover:border-slate-300 dark:hover:border-zinc-600 text-slate-600 dark:text-zinc-400'
                 )}
               >
                 {currentTemplate ? (
@@ -535,12 +535,12 @@ function JournalEntryContent() {
                     <span className="text-sm font-medium">Free-form</span>
                   </>
                 )}
-                <span className="material-symbols-outlined text-slate-400 text-[16px]">expand_more</span>
+                <span className="material-symbols-outlined text-slate-400 dark:text-zinc-500 text-[16px]">expand_more</span>
               </button>
 
               {showTemplateSelector && (
-                <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 min-w-[220px]">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 px-3 py-2">
+                <div className="absolute top-full left-0 mt-2 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-slate-200 dark:border-zinc-700 p-2 z-50 min-w-[220px]">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 px-3 py-2">
                     Journal Mode
                   </p>
                   <button
@@ -551,15 +551,15 @@ function JournalEntryContent() {
                     className={cn(
                       'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left',
                       !selectedTemplate
-                        ? 'bg-cyan-50 text-cyan-700'
-                        : 'hover:bg-slate-50 text-slate-700'
+                        ? 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400'
+                        : 'hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300'
                     )}
                   >
                     <span className="material-symbols-outlined text-[20px]">edit_note</span>
                     <span className="text-sm font-medium">Free-form Writing</span>
                   </button>
-                  <div className="h-px bg-slate-100 my-2" />
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 px-3 py-2">
+                  <div className="h-px bg-slate-100 dark:bg-zinc-700 my-2" />
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 px-3 py-2">
                     Templates
                   </p>
                   {templates.map((template) => (
@@ -572,8 +572,8 @@ function JournalEntryContent() {
                       className={cn(
                         'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-colors text-left',
                         selectedTemplate === template.id
-                          ? 'bg-cyan-50 text-cyan-700'
-                          : 'hover:bg-slate-50 text-slate-700'
+                          ? 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-400'
+                          : 'hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300'
                       )}
                     >
                       <span
@@ -584,16 +584,16 @@ function JournalEntryContent() {
                       </span>
                       <span className="text-sm font-medium">{template.name}</span>
                       {template.is_default && (
-                        <span className="ml-auto text-xs text-cyan-600 bg-cyan-100 px-1.5 py-0.5 rounded">
+                        <span className="ml-auto text-xs text-cyan-600 dark:text-cyan-400 bg-cyan-100 dark:bg-cyan-900/50 px-1.5 py-0.5 rounded">
                           Default
                         </span>
                       )}
                     </button>
                   ))}
-                  <div className="h-px bg-slate-100 my-2" />
+                  <div className="h-px bg-slate-100 dark:bg-zinc-700 my-2" />
                   <Link
                     href="/templates"
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-700 rounded-lg transition-colors"
                     onClick={() => setShowTemplateSelector(false)}
                   >
                     <span className="material-symbols-outlined text-[18px]">settings</span>
@@ -605,7 +605,7 @@ function JournalEntryContent() {
           )}
 
           {!selectedTemplate && (
-            <p className={`text-xs ml-2 ${saveStatus === 'error' ? 'text-red-500' : 'text-slate-500'}`}>
+            <p className={`text-xs ml-2 ${saveStatus === 'error' ? 'text-red-500' : 'text-slate-500 dark:text-zinc-400'}`}>
               {getStatusText()}
             </p>
           )}
@@ -627,7 +627,7 @@ function JournalEntryContent() {
             )}
             <Link
               href="/dashboard"
-              className="flex h-10 items-center justify-center overflow-hidden rounded-lg px-4 bg-slate-100 text-slate-700 text-sm font-bold leading-normal tracking-wide hover:bg-slate-200 transition-colors"
+              className="flex h-10 items-center justify-center overflow-hidden rounded-lg px-4 bg-slate-100 dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 text-sm font-bold leading-normal tracking-wide hover:bg-slate-200 dark:hover:bg-zinc-600 transition-colors"
             >
               Close
             </Link>
@@ -653,13 +653,13 @@ function JournalEntryContent() {
         /* Main Content - Free-form */
         <div className="flex flex-1 overflow-hidden">
         <main className="flex-1 flex flex-col items-center overflow-y-auto relative p-0 sm:p-4 lg:p-8">
-          <div className="w-full max-w-[850px] flex flex-col bg-white sm:rounded-xl sm:shadow-sm min-h-full sm:min-h-[80vh] border-x sm:border border-slate-200">
+          <div className="w-full max-w-[850px] flex flex-col bg-white dark:bg-zinc-800 sm:rounded-xl sm:shadow-sm min-h-full sm:min-h-[80vh] border-x sm:border border-slate-200 dark:border-zinc-700">
             {/* Loading State */}
             {isLoading ? (
               <div className="flex-1 flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
-                  <p className="text-sm text-slate-500">Loading entry...</p>
+                  <div className="w-8 h-8 border-2 border-cyan-600 dark:border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-sm text-slate-500 dark:text-zinc-400">Loading entry...</p>
                 </div>
               </div>
             ) : (
@@ -672,37 +672,37 @@ function JournalEntryContent() {
                 )}
 
                 {/* Mood and Tags */}
-                <div className="px-8 pt-8 pb-4 flex flex-wrap gap-6 border-b border-dashed border-slate-200">
+                <div className="px-8 pt-8 pb-4 flex flex-wrap gap-6 border-b border-dashed border-slate-200 dark:border-zinc-700">
                   {/* Mood Selector */}
                   <div className="flex flex-col gap-2">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Mood</label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Mood</label>
                     <div className="flex gap-2 relative" ref={moodPickerRef}>
                       <button
                         onClick={() => setShowMoodPicker(!showMoodPicker)}
                         className={`group flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
                           mood
-                            ? 'border-cyan-600/30 bg-cyan-600/10 hover:bg-cyan-600/20'
-                            : 'border-slate-200 hover:border-cyan-600/30 hover:bg-cyan-600/5'
+                            ? 'border-cyan-600/30 dark:border-cyan-500/30 bg-cyan-600/10 dark:bg-cyan-500/10 hover:bg-cyan-600/20 dark:hover:bg-cyan-500/20'
+                            : 'border-slate-200 dark:border-zinc-600 hover:border-cyan-600/30 dark:hover:border-cyan-500/30 hover:bg-cyan-600/5 dark:hover:bg-cyan-500/10'
                         }`}
                       >
                         {mood ? (
                           <>
                             <span className="text-lg">{mood.emoji}</span>
-                            <span className="text-sm font-medium text-cyan-600">{mood.label}</span>
+                            <span className="text-sm font-medium text-cyan-600 dark:text-cyan-400">{mood.label}</span>
                           </>
                         ) : (
                           <>
-                            <span className="material-symbols-outlined text-slate-400 group-hover:text-cyan-600 text-[18px]">mood</span>
-                            <span className="text-sm font-medium text-slate-400 group-hover:text-cyan-600">Set mood</span>
+                            <span className="material-symbols-outlined text-slate-400 dark:text-zinc-500 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 text-[18px]">mood</span>
+                            <span className="text-sm font-medium text-slate-400 dark:text-zinc-500 group-hover:text-cyan-600 dark:group-hover:text-cyan-400">Set mood</span>
                           </>
                         )}
-                        <span className="material-symbols-outlined text-slate-400 text-[16px]">expand_more</span>
+                        <span className="material-symbols-outlined text-slate-400 dark:text-zinc-500 text-[16px]">expand_more</span>
                       </button>
 
                       {/* Mood Picker Dropdown */}
                       {showMoodPicker && (
-                        <div className="absolute top-full left-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 min-w-[200px]">
-                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2 px-2">How are you feeling?</p>
+                        <div className="absolute top-full left-0 mt-2 bg-white dark:bg-zinc-800 rounded-xl shadow-xl border border-slate-200 dark:border-zinc-700 p-3 z-50 min-w-[200px]">
+                          <p className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-2 px-2">How are you feeling?</p>
                           <div className="grid grid-cols-2 gap-1">
                             {moodOptions.map((option) => (
                               <button
@@ -713,8 +713,8 @@ function JournalEntryContent() {
                                 }}
                                 className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-left ${
                                   mood?.value === option.value
-                                    ? 'bg-cyan-50 text-cyan-600'
-                                    : 'hover:bg-slate-50 text-slate-700'
+                                    ? 'bg-cyan-50 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400'
+                                    : 'hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300'
                                 }`}
                               >
                                 <span className="text-lg">{option.emoji}</span>
@@ -728,7 +728,7 @@ function JournalEntryContent() {
                                 handleMoodChange(null)
                                 setShowMoodPicker(false)
                               }}
-                              className="w-full mt-2 px-3 py-2 text-sm text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              className="w-full mt-2 px-3 py-2 text-sm text-slate-500 dark:text-zinc-400 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                             >
                               Clear mood
                             </button>
@@ -740,24 +740,24 @@ function JournalEntryContent() {
 
                   {/* Tags */}
                   <div className="flex flex-col gap-2 flex-1 min-w-[200px]">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Tags</label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Tags</label>
                     <div className="flex items-center gap-2 flex-wrap">
                       {tags.map((tag) => (
                         <span
                           key={tag}
-                          className="inline-flex items-center px-2.5 py-1 rounded bg-slate-100 text-slate-600 text-sm hover:bg-slate-200 transition-colors"
+                          className="inline-flex items-center px-2.5 py-1 rounded bg-slate-100 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 text-sm hover:bg-slate-200 dark:hover:bg-zinc-600 transition-colors"
                         >
                           {tag}
                           <button
                             onClick={() => handleRemoveTag(tag)}
-                            className="ml-1.5 hover:text-slate-900"
+                            className="ml-1.5 hover:text-slate-900 dark:hover:text-white"
                           >
                             <span className="material-symbols-outlined text-[14px]">close</span>
                           </button>
                         </span>
                       ))}
                       <input
-                        className="bg-transparent border-none text-sm p-1 focus:ring-0 text-slate-900 placeholder-slate-400 outline-none"
+                        className="bg-transparent border-none text-sm p-1 focus:ring-0 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-zinc-500 outline-none"
                         placeholder="Add tag..."
                         type="text"
                         value={newTag}
@@ -769,14 +769,14 @@ function JournalEntryContent() {
                 </div>
 
                 {/* Formatting Toolbar */}
-                <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm px-8 py-3 border-b border-slate-200 flex items-center justify-between gap-4">
+                <div className="sticky top-0 z-10 bg-white/95 dark:bg-zinc-800/95 backdrop-blur-sm px-8 py-3 border-b border-slate-200 dark:border-zinc-700 flex items-center justify-between gap-4">
                   <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                     <button
                       onClick={() => editor?.chain().focus().toggleBold().run()}
                       className={`p-2 rounded transition-colors ${
                         editor?.isActive('bold')
-                          ? 'bg-cyan-100 text-cyan-600'
-                          : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400'
+                          : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title="Bold (Ctrl+B)"
                     >
@@ -786,8 +786,8 @@ function JournalEntryContent() {
                       onClick={() => editor?.chain().focus().toggleItalic().run()}
                       className={`p-2 rounded transition-colors ${
                         editor?.isActive('italic')
-                          ? 'bg-cyan-100 text-cyan-600'
-                          : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400'
+                          : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title="Italic (Ctrl+I)"
                     >
@@ -797,20 +797,20 @@ function JournalEntryContent() {
                       onClick={() => editor?.chain().focus().toggleUnderline().run()}
                       className={`p-2 rounded transition-colors ${
                         editor?.isActive('underline')
-                          ? 'bg-cyan-100 text-cyan-600'
-                          : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400'
+                          : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title="Underline (Ctrl+U)"
                     >
                       <span className="material-symbols-outlined text-[20px]">format_underlined</span>
                     </button>
-                    <div className="w-px h-5 bg-slate-200 mx-2"></div>
+                    <div className="w-px h-5 bg-slate-200 dark:bg-zinc-600 mx-2"></div>
                     <button
                       onClick={() => editor?.chain().focus().toggleBulletList().run()}
                       className={`p-2 rounded transition-colors ${
                         editor?.isActive('bulletList')
-                          ? 'bg-cyan-100 text-cyan-600'
-                          : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400'
+                          : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title="Bullet List"
                     >
@@ -820,8 +820,8 @@ function JournalEntryContent() {
                       onClick={() => editor?.chain().focus().toggleOrderedList().run()}
                       className={`p-2 rounded transition-colors ${
                         editor?.isActive('orderedList')
-                          ? 'bg-cyan-100 text-cyan-600'
-                          : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400'
+                          : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title="Numbered List"
                     >
@@ -831,20 +831,20 @@ function JournalEntryContent() {
                       onClick={() => editor?.chain().focus().toggleBlockquote().run()}
                       className={`p-2 rounded transition-colors ${
                         editor?.isActive('blockquote')
-                          ? 'bg-cyan-100 text-cyan-600'
-                          : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400'
+                          : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title="Quote"
                     >
                       <span className="material-symbols-outlined text-[20px]">format_quote</span>
                     </button>
-                    <div className="w-px h-5 bg-slate-200 mx-2"></div>
+                    <div className="w-px h-5 bg-slate-200 dark:bg-zinc-600 mx-2"></div>
                     <button
                       onClick={addLink}
                       className={`p-2 rounded transition-colors ${
                         editor?.isActive('link')
-                          ? 'bg-cyan-100 text-cyan-600'
-                          : 'text-slate-400 hover:bg-slate-100 hover:text-slate-900'
+                          ? 'bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600 dark:text-cyan-400'
+                          : 'text-slate-400 dark:text-zinc-500 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white'
                       }`}
                       title="Insert Link"
                     >
@@ -861,7 +861,7 @@ function JournalEntryContent() {
                     />
                     <button
                       onClick={() => fileInputRef.current?.click()}
-                      className="p-2 rounded flex items-center gap-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors text-sm font-medium"
+                      className="p-2 rounded flex items-center gap-2 text-slate-500 dark:text-zinc-400 hover:bg-slate-100 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
                     >
                       <span className="material-symbols-outlined text-[20px]">image</span>
                       <span className="hidden md:inline">Add Media</span>
@@ -872,7 +872,7 @@ function JournalEntryContent() {
                 {/* Editor Content */}
                 <div className="flex-1 p-8 md:px-12 lg:px-16 flex flex-col">
                   <input
-                    className="w-full bg-transparent border-none text-3xl md:text-4xl font-extrabold text-slate-900 placeholder-slate-300 focus:ring-0 px-0 py-4 mb-2 leading-tight outline-none"
+                    className="w-full bg-transparent border-none text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-zinc-600 focus:ring-0 px-0 py-4 mb-2 leading-tight outline-none"
                     placeholder="Give your day a title..."
                     value={title}
                     onChange={(e) => handleTitleChange(e.target.value)}
@@ -885,8 +885,8 @@ function JournalEntryContent() {
 
                   {/* Pro tip for empty state */}
                   {!hasContent && (
-                    <div className="py-8 text-center border-t border-dashed border-slate-200 mt-8">
-                      <p className="text-slate-400 text-sm">
+                    <div className="py-8 text-center border-t border-dashed border-slate-200 dark:border-zinc-700 mt-8">
+                      <p className="text-slate-400 dark:text-zinc-500 text-sm">
                         Pro tip: Use the toolbar above to format your text. You can also paste images directly (Ctrl+V).
                       </p>
                     </div>
@@ -899,22 +899,22 @@ function JournalEntryContent() {
         </main>
 
         {/* Sidebar */}
-        <aside className="hidden 2xl:flex w-80 flex-col border-l border-slate-200 bg-white p-6 gap-8 overflow-y-auto shrink-0">
+        <aside className="hidden 2xl:flex w-80 flex-col border-l border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-6 gap-8 overflow-y-auto shrink-0">
           {/* Entry Stats */}
-          <div className="rounded-xl bg-slate-50 p-5 border border-slate-100">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">Entry Stats</h3>
+          <div className="rounded-xl bg-slate-50 dark:bg-zinc-800 p-5 border border-slate-100 dark:border-zinc-700">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-4">Entry Stats</h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-2xl font-bold text-slate-900">
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">
                   {editor ? editor.storage.characterCount?.words?.() || editor.getText().split(/\s+/).filter(Boolean).length : 0}
                 </p>
-                <p className="text-xs text-slate-500">Words</p>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">Words</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-900">
+                <p className="text-2xl font-bold text-slate-900 dark:text-white">
                   {editor ? Math.ceil((editor.getText().split(/\s+/).filter(Boolean).length || 0) / 200) : 0}
                 </p>
-                <p className="text-xs text-slate-500">Minutes</p>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">Minutes</p>
               </div>
             </div>
           </div>
@@ -922,28 +922,28 @@ function JournalEntryContent() {
           {/* Attachments */}
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500">Attachments</h3>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">Attachments</h3>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="text-cyan-600 hover:text-cyan-700 text-xs font-bold"
+                className="text-cyan-600 dark:text-cyan-400 hover:text-cyan-700 dark:hover:text-cyan-300 text-xs font-bold"
               >
                 Add New
               </button>
             </div>
             <div className="flex flex-col gap-3">
               {images.map((img, index) => (
-                <div key={index} className="group flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer border border-transparent hover:border-slate-200">
+                <div key={index} className="group flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-zinc-700">
                   <div
                     className="w-12 h-12 rounded-lg bg-cover bg-center shrink-0"
                     style={{ backgroundImage: `url(${img.url})` }}
                   ></div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{img.name}</p>
-                    <p className="text-xs text-slate-500">Image</p>
+                    <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{img.name}</p>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">Image</p>
                   </div>
                   <button
                     onClick={() => setImages(images.filter((_, i) => i !== index))}
-                    className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-400 transition-all"
+                    className="opacity-0 group-hover:opacity-100 text-slate-400 dark:text-zinc-500 hover:text-red-400 transition-all"
                   >
                     <span className="material-symbols-outlined text-[18px]">delete</span>
                   </button>
@@ -951,35 +951,35 @@ function JournalEntryContent() {
               ))}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center gap-2 hover:border-cyan-600/50 hover:bg-cyan-600/5 transition-all cursor-pointer group"
+                className="border-2 border-dashed border-slate-200 dark:border-zinc-700 rounded-xl p-6 flex flex-col items-center justify-center text-center gap-2 hover:border-cyan-600/50 dark:hover:border-cyan-500/50 hover:bg-cyan-600/5 dark:hover:bg-cyan-500/10 transition-all cursor-pointer group"
               >
-                <span className="material-symbols-outlined text-slate-400 group-hover:text-cyan-600 transition-colors text-[32px]">cloud_upload</span>
-                <p className="text-xs text-slate-500 font-medium">Drop files here or click to upload</p>
+                <span className="material-symbols-outlined text-slate-400 dark:text-zinc-500 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors text-[32px]">cloud_upload</span>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 font-medium">Drop files here or click to upload</p>
               </div>
             </div>
           </div>
 
           {/* Reflection Prompts */}
           <div>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">Reflection Prompts</h3>
+            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 mb-4">Reflection Prompts</h3>
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => editor?.chain().focus().insertContent('What is one thing I learned today? ').run()}
-                className="text-left p-3 rounded-lg bg-slate-50 hover:bg-cyan-600/5 hover:ring-1 ring-cyan-600/30 transition-all"
+                className="text-left p-3 rounded-lg bg-slate-50 dark:bg-zinc-800 hover:bg-cyan-600/5 dark:hover:bg-cyan-500/10 hover:ring-1 ring-cyan-600/30 dark:ring-cyan-500/30 transition-all"
               >
-                <p className="text-sm text-slate-700 leading-snug">What is one thing you learned today?</p>
+                <p className="text-sm text-slate-700 dark:text-zinc-300 leading-snug">What is one thing you learned today?</p>
               </button>
               <button
                 onClick={() => editor?.chain().focus().insertContent('I am grateful for... ').run()}
-                className="text-left p-3 rounded-lg bg-slate-50 hover:bg-cyan-600/5 hover:ring-1 ring-cyan-600/30 transition-all"
+                className="text-left p-3 rounded-lg bg-slate-50 dark:bg-zinc-800 hover:bg-cyan-600/5 dark:hover:bg-cyan-500/10 hover:ring-1 ring-cyan-600/30 dark:ring-cyan-500/30 transition-all"
               >
-                <p className="text-sm text-slate-700 leading-snug">Describe a moment of gratitude.</p>
+                <p className="text-sm text-slate-700 dark:text-zinc-300 leading-snug">Describe a moment of gratitude.</p>
               </button>
               <button
                 onClick={() => editor?.chain().focus().insertContent('Tomorrow I want to... ').run()}
-                className="text-left p-3 rounded-lg bg-slate-50 hover:bg-cyan-600/5 hover:ring-1 ring-cyan-600/30 transition-all"
+                className="text-left p-3 rounded-lg bg-slate-50 dark:bg-zinc-800 hover:bg-cyan-600/5 dark:hover:bg-cyan-500/10 hover:ring-1 ring-cyan-600/30 dark:ring-cyan-500/30 transition-all"
               >
-                <p className="text-sm text-slate-700 leading-snug">What do you want to accomplish tomorrow?</p>
+                <p className="text-sm text-slate-700 dark:text-zinc-300 leading-snug">What do you want to accomplish tomorrow?</p>
               </button>
             </div>
           </div>
@@ -993,17 +993,17 @@ function JournalEntryContent() {
 // Loading fallback for Suspense
 function JournalLoadingFallback() {
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-slate-50">
-      <header className="flex items-center justify-between whitespace-nowrap border-b border-slate-200 px-6 py-4 bg-white/90 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
+    <div className="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-transparent">
+      <header className="flex items-center justify-between whitespace-nowrap border-b border-slate-200 dark:border-zinc-700 px-6 py-4 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-slate-100 rounded-lg animate-pulse"></div>
-          <div className="w-48 h-6 bg-slate-100 rounded animate-pulse"></div>
+          <div className="w-10 h-10 bg-slate-100 dark:bg-zinc-700 rounded-lg animate-pulse"></div>
+          <div className="w-48 h-6 bg-slate-100 dark:bg-zinc-700 rounded animate-pulse"></div>
         </div>
       </header>
       <div className="flex-1 flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm text-slate-500">Loading journal...</p>
+          <div className="w-8 h-8 border-2 border-cyan-600 dark:border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-sm text-slate-500 dark:text-zinc-400">Loading journal...</p>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 export { NotesEditor } from './NotesEditor'
+export type { NotesEditorHandle } from './NotesEditor'
 export { EditorToolbar } from './EditorToolbar'
 export { LinkEditorModal } from './LinkEditorModal'
 export { TagSelector } from './TagSelector'

@@ -49,8 +49,13 @@ import {
   ResearchSourcesPanel,
   ResearchNoteRenderer,
 } from '@/components/notes'
+import type { NotesEditorHandle } from '@/components/notes/NotesEditor'
+import { ResearchPanel } from '@/components/notes/ResearchPanel'
 import { NoteFolderTree } from '@/components/notes/NoteFolderTree'
 import { ShareNoteDialog } from '@/components/notes/ShareNoteDialog'
+import { LinkedProjectsPanelForNotes } from '@/components/projects'
+import { getFileDownloadUrl } from '@/lib/projectService'
+import { markdownToTiptap, markdownToPlainText } from '@/lib/markdownToTiptap'
 import type { LinkedTask } from '@/lib/notes/taskLinks'
 import type { Note, NoteFolder, NoteFolderWithNotes, NoteTag, NoteFolderTreeNode, NoteBreadcrumbSegment } from '@/types/database'
 
@@ -227,6 +232,10 @@ function NotesPageContent() {
   const isDemo = isDemoAccount(user?.email)
   const searchParams = useSearchParams()
   const noteIdFromUrl = searchParams.get('note')
+  const createFromFile = searchParams.get('createFromFile')
+  const fileNameFromUrl = searchParams.get('fileName')
+  const projectNameFromUrl = searchParams.get('projectName')
+  const filePathFromUrl = searchParams.get('filePath')
 
   const [notes, setNotes] = useState<Note[]>([])
   const [allRecentNotes, setAllRecentNotes] = useState<Note[]>([]) // All recent notes across all folders
@@ -251,6 +260,9 @@ function NotesPageContent() {
   // Share dialog state
   const [showShareDialog, setShowShareDialog] = useState(false)
 
+  // Research Panel state
+  const [isResearchPanelOpen, setIsResearchPanelOpen] = useState(false)
+
   // Tags state
   const [tags, setTags] = useState<NoteTag[]>([])
   const [selectedNoteTags, setSelectedNoteTags] = useState<NoteTag[]>([])
@@ -273,6 +285,7 @@ function NotesPageContent() {
 
   const folderModalRef = useRef<HTMLDivElement>(null)
   const titleInputRef = useRef<HTMLInputElement>(null)
+  const editorRef = useRef<NotesEditorHandle>(null)
   const starterFoldersCreated = useRef(false)
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   // Debounce saving indicator to prevent rapid flashing
@@ -305,10 +318,7 @@ function NotesPageContent() {
       setFolderTree(demoFolderTree)
       setRootNoteCount(demoNotes.filter(n => !n.is_archived).length)
       setArchivedNoteCount(0)
-      // Only auto-select on initial load (not when navigating folders)
-      if (!selectedNoteRef.current && !initialLoadDone.current) {
-        setSelectedNote(demoNotes[0])
-      }
+      // Don't auto-select a note - let user choose from folder view
       initialLoadDone.current = true
       setIsLoading(false)
       return
@@ -350,10 +360,7 @@ function NotesPageContent() {
       setRootNoteCount(rootCount)
       setArchivedNoteCount(archiveCount)
 
-      // Select first note ONLY on initial load (not when navigating folders)
-      if (notesData.length > 0 && !selectedNoteRef.current && !initialLoadDone.current) {
-        setSelectedNote(notesData[0])
-      }
+      // Don't auto-select a note - let user choose from folder view
       initialLoadDone.current = true
     } catch (error) {
       console.error('Error loading data:', error)
@@ -417,6 +424,110 @@ function NotesPageContent() {
 
     selectNoteFromUrl()
   }, [noteIdFromUrl, notes, isDemo])
+
+  // Handle creating note from project file (e.g., /notes?createFromFile=true&fileName=xxx&filePath=xxx)
+  useEffect(() => {
+    if (!createFromFile || !fileNameFromUrl || isLoading) return
+
+    const createNoteFromFile = async () => {
+      // Try to fetch file content
+      let fileContent = ''
+      const isMarkdownFile = fileNameFromUrl.toLowerCase().endsWith('.md') ||
+                              fileNameFromUrl.toLowerCase().endsWith('.markdown')
+
+      if (filePathFromUrl) {
+        try {
+          const downloadUrl = await getFileDownloadUrl(filePathFromUrl)
+          if (downloadUrl) {
+            const response = await fetch(downloadUrl)
+            fileContent = await response.text()
+          }
+        } catch (error) {
+          console.error('Error fetching file content:', error)
+        }
+      }
+
+      // Fallback content if file couldn't be fetched
+      if (!fileContent) {
+        fileContent = projectNameFromUrl
+          ? `Imported from project: ${projectNameFromUrl}`
+          : 'Imported from project file'
+      }
+
+      // Convert content based on file type
+      // For markdown files, use the proper parser to preserve formatting
+      // For other text files, treat as plain text
+      const noteContent = isMarkdownFile
+        ? markdownToTiptap(fileContent)
+        : {
+            type: 'doc' as const,
+            content: [{
+              type: 'paragraph',
+              content: [{ type: 'text', text: fileContent }]
+            }]
+          }
+
+      const plainTextContent = isMarkdownFile
+        ? markdownToPlainText(fileContent)
+        : fileContent
+
+      // Extract title from first heading if available, otherwise use filename
+      let noteTitle = fileNameFromUrl
+      if (isMarkdownFile) {
+        const headingMatch = fileContent.match(/^#\s+(.+)$/m)
+        if (headingMatch) {
+          noteTitle = headingMatch[1].trim()
+        }
+      }
+
+      if (isDemo) {
+        const newNote: Note = {
+          id: `demo-${Date.now()}`,
+          user_id: 'demo',
+          title: noteTitle,
+          content: noteContent,
+          content_text: plainTextContent,
+          folder_id: selectedFolderId,
+          is_pinned: false,
+          is_archived: false,
+          word_count: plainTextContent.split(/\s+/).filter(Boolean).length,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+        setNotes([newNote, ...notes])
+        setAllRecentNotes([newNote, ...allRecentNotes])
+        setSelectedNote(newNote)
+        // Clear URL params
+        window.history.replaceState({}, '', '/notes')
+        return
+      }
+
+      setIsSaving(true)
+      try {
+        const newNote = await createNote({
+          title: noteTitle,
+          content: noteContent,
+          content_text: plainTextContent,
+          folder_id: selectedFolderId,
+        })
+
+        if (newNote) {
+          setNotes([newNote, ...notes])
+          setAllRecentNotes([newNote, ...allRecentNotes])
+          setSelectedNote(newNote)
+          // Clear URL params and update to show the new note
+          window.history.replaceState({}, '', `/notes?note=${newNote.id}`)
+          setTimeout(() => titleInputRef.current?.focus(), 100)
+        }
+      } catch (error) {
+        console.error('Error creating note from file:', error)
+      } finally {
+        setIsSaving(false)
+      }
+    }
+
+    createNoteFromFile()
+  }, [createFromFile, fileNameFromUrl, projectNameFromUrl, filePathFromUrl, isLoading, isDemo, notes, allRecentNotes, selectedFolderId])
 
   // Load tags for selected note
   useEffect(() => {
@@ -963,7 +1074,7 @@ function NotesPageContent() {
         <aside
           aria-label="Notes sidebar"
           className={cn(
-            'flex-shrink-0 border-r border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 transition-all duration-300 ease-in-out overflow-hidden',
+            'flex-shrink-0 border-r border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 transition-all duration-300 ease-in-out overflow-hidden',
             isPanelOpen ? 'w-[clamp(280px,22vw,360px)] md:w-[clamp(280px,22vw,360px)]' : 'w-0',
             // Mobile: full width when open
             isPanelOpen && 'max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40 max-md:w-[85vw]'
@@ -972,26 +1083,26 @@ function NotesPageContent() {
           {/* Inner container that matches aside width */}
           <div className="w-[clamp(280px,22vw,360px)] max-md:w-full h-full flex flex-col">
           {/* Panel Header */}
-          <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center h-16 flex-shrink-0">
-            <h2 className="font-bold text-slate-900 dark:text-slate-100 text-lg tracking-tight whitespace-nowrap">My Notes</h2>
+          <div className="p-4 border-b border-zinc-200 dark:border-zinc-700 flex justify-between items-center h-16 flex-shrink-0">
+            <h2 className="font-bold text-zinc-900 dark:text-zinc-100 text-lg tracking-tight whitespace-nowrap">My Notes</h2>
             <div className="flex gap-1">
               {/* Mobile close button */}
               <button
                 onClick={() => setIsPanelOpen(false)}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors md:hidden"
+                className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors md:hidden"
                 aria-label="Close sidebar"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
               <button
                 onClick={() => openFolderModal()}
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
                 aria-label="Create new folder"
               >
                 <span className="material-symbols-outlined text-[20px]">create_new_folder</span>
               </button>
               <button
-                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
+                className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors"
                 aria-label="Sort notes"
               >
                 <span className="material-symbols-outlined text-[20px]">sort</span>
@@ -1004,7 +1115,7 @@ function NotesPageContent() {
           {/* Folder Tree Section */}
           <nav aria-label="Note folders" className="space-y-1">
             <div className="flex items-center justify-between px-3 mb-2">
-              <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Folders</h3>
+              <h3 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Folders</h3>
             </div>
             <NoteFolderTree
               folders={folderTree}
@@ -1034,8 +1145,8 @@ function NotesPageContent() {
           </nav>
 
           {/* Recent Section - Uses memoized component to prevent flicker during typing */}
-          <div className="space-y-1 pt-4 border-t border-slate-100 dark:border-slate-700">
-            <h3 className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider px-3 mb-2">Recent</h3>
+          <div className="space-y-1 pt-4 border-t border-zinc-100 dark:border-zinc-700">
+            <h3 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider px-3 mb-2">Recent</h3>
             <div className="px-1">
               <RecentNotesList
                 notes={recentNotes}
@@ -1047,7 +1158,7 @@ function NotesPageContent() {
         </div>
 
           {/* New Note Button - Uses memoized component to prevent flicker */}
-          <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 flex-shrink-0">
+          <div className="p-4 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-700 flex-shrink-0">
             <NewNoteButton onClick={handleCreateNote} />
           </div>
         </div>
@@ -1063,14 +1174,14 @@ function NotesPageContent() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full bg-white dark:bg-slate-900 overflow-hidden min-w-0">
+      <main className="flex-1 flex flex-col h-full bg-white dark:bg-zinc-900 overflow-hidden min-w-0">
         {/* Header */}
-        <header className="h-16 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between px-4 md:px-6 bg-white dark:bg-slate-900 flex-shrink-0 z-20 relative gap-3 md:gap-6">
+        <header className="h-16 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between px-4 md:px-6 bg-white dark:bg-zinc-900 flex-shrink-0 z-20 relative gap-3 md:gap-6">
           <div className="flex items-center gap-2 md:gap-4 min-w-0">
             {/* Toggle Panel Button */}
             <button
               onClick={() => setIsPanelOpen(!isPanelOpen)}
-              className="p-2 -ml-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+              className="p-2 -ml-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
               aria-label={isPanelOpen ? 'Close notes panel' : 'Open notes panel'}
               aria-expanded={isPanelOpen}
             >
@@ -1080,12 +1191,12 @@ function NotesPageContent() {
             </button>
 
             {/* Divider - Hidden on mobile */}
-            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 hidden md:block"></div>
+            <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-700 hidden md:block"></div>
 
             {/* Breadcrumb */}
             <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm min-w-0">
               <button
-                className="text-slate-500 dark:text-slate-400 flex items-center gap-1 cursor-pointer hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
+                className="text-zinc-500 dark:text-zinc-400 flex items-center gap-1 cursor-pointer hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                 onClick={() => { setSelectedFolderId(null); setShowArchived(false); }}
               >
                 <span className="material-symbols-outlined text-[18px]">folder_open</span>
@@ -1093,8 +1204,8 @@ function NotesPageContent() {
               </button>
               {selectedNote && (
                 <>
-                  <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[16px]">chevron_right</span>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100 truncate max-w-[120px] md:max-w-[200px]">{selectedNote.title}</span>
+                  <span className="material-symbols-outlined text-zinc-300 dark:text-zinc-600 text-[16px]">chevron_right</span>
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-100 truncate max-w-[120px] md:max-w-[200px]">{selectedNote.title}</span>
                 </>
               )}
             </nav>
@@ -1103,19 +1214,19 @@ function NotesPageContent() {
           {/* Search Bar */}
           <div className="flex-1 max-w-xl hidden sm:block">
             <div className="relative group w-full">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 material-symbols-outlined transition-colors group-focus-within:text-cyan-600 dark:group-focus-within:text-cyan-400 text-[20px]">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 material-symbols-outlined transition-colors group-focus-within:text-cyan-600 dark:group-focus-within:text-cyan-400 text-[20px]">
                 search
               </span>
               <input
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 pl-10 pr-12 py-2 rounded-lg border-transparent focus:bg-white dark:focus:bg-slate-700 focus:border-cyan-300 dark:focus:border-cyan-500 focus:ring-1 focus:ring-cyan-300 dark:focus:ring-cyan-500 focus:outline-none transition-all placeholder-slate-400 dark:placeholder-slate-500 text-sm"
+                className="w-full bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 pl-10 pr-12 py-2 rounded-lg border-transparent focus:bg-white dark:focus:bg-zinc-700 focus:border-cyan-300 dark:focus:border-cyan-500 focus:ring-1 focus:ring-cyan-300 dark:focus:ring-cyan-500 focus:outline-none transition-all placeholder-zinc-400 dark:placeholder-zinc-500 text-sm"
                 placeholder="Search notes, folders and tags..."
                 aria-label="Search notes"
               />
               <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 pointer-events-none">
-                <kbd className="hidden lg:inline-block px-1.5 py-0.5 text-[10px] font-bold text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded shadow-sm">
+                <kbd className="hidden lg:inline-block px-1.5 py-0.5 text-[10px] font-bold text-zinc-400 dark:text-zinc-500 bg-white dark:bg-zinc-700 border border-zinc-200 dark:border-zinc-600 rounded shadow-sm">
                   Ctrl+K
                 </kbd>
               </div>
@@ -1131,7 +1242,7 @@ function NotesPageContent() {
                   'p-2 rounded-lg transition-colors',
                   selectedNote.is_pinned
                     ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/30'
-                    : 'text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                 )}
                 aria-label={selectedNote.is_pinned ? 'Unpin note' : 'Pin note'}
                 aria-pressed={selectedNote.is_pinned}
@@ -1140,7 +1251,7 @@ function NotesPageContent() {
               </button>
               <button
                 onClick={() => handleToggleArchive(selectedNote.id, selectedNote.is_archived)}
-                className="p-2 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="p-2 rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
                 aria-label={selectedNote.is_archived ? 'Unarchive note' : 'Archive note'}
               >
                 <span className="material-symbols-outlined text-[20px]">
@@ -1150,19 +1261,35 @@ function NotesPageContent() {
               {!isDemo && (
                 <button
                   onClick={() => setShowShareDialog(true)}
-                  className="p-2 rounded-lg text-slate-400 dark:text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 transition-colors"
+                  className="p-2 rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/30 transition-colors"
                   aria-label="Share note"
                 >
                   <span className="material-symbols-outlined text-[20px]">share</span>
                 </button>
               )}
 
+              {/* Research Panel Toggle */}
+              <button
+                onClick={() => setIsResearchPanelOpen(!isResearchPanelOpen)}
+                className={cn(
+                  'p-2 rounded-lg transition-colors',
+                  isResearchPanelOpen
+                    ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-50 dark:bg-cyan-900/30'
+                    : 'text-zinc-400 dark:text-zinc-500 hover:text-cyan-600 dark:hover:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/30'
+                )}
+                aria-label={isResearchPanelOpen ? 'Close research panel' : 'Open research panel'}
+                aria-pressed={isResearchPanelOpen}
+                title="AI Research Assistant"
+              >
+                <span className="material-symbols-outlined text-[20px]">smart_toy</span>
+              </button>
+
               {/* Divider */}
-              <div className="h-5 w-px bg-slate-200 dark:bg-slate-700 mx-2 hidden sm:block"></div>
+              <div className="h-5 w-px bg-zinc-200 dark:bg-zinc-700 mx-2 hidden sm:block"></div>
 
               <button
                 onClick={() => handleDeleteNote(selectedNote.id)}
-                className="p-2 rounded-lg text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                className="p-2 rounded-lg text-zinc-400 dark:text-zinc-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
                 aria-label="Delete note"
               >
                 <span className="material-symbols-outlined text-[20px]">delete</span>
@@ -1191,7 +1318,7 @@ function NotesPageContent() {
                 onChange={(e) => handleTitleChange(e.target.value)}
                 placeholder="Untitled Note"
                 aria-label="Note title"
-                className="text-xl md:text-2xl font-bold text-slate-900 dark:text-slate-100 border-none p-0 focus:ring-0 placeholder-slate-300 dark:placeholder-slate-600 bg-transparent mb-3 w-full leading-tight outline-none"
+                className="text-xl md:text-2xl font-bold text-zinc-900 dark:text-zinc-100 border-none p-0 focus:ring-0 placeholder-zinc-300 dark:placeholder-zinc-600 bg-transparent mb-3 w-full leading-tight outline-none"
               />
 
               {/* Tags & Folder Row - Combined on same line */}
@@ -1207,12 +1334,12 @@ function NotesPageContent() {
 
                 {/* Folder Selector */}
                 <div className="flex items-center gap-2">
-                  <label htmlFor="folder-select" className="text-xs text-slate-400 dark:text-slate-500">Folder:</label>
+                  <label htmlFor="folder-select" className="text-xs text-zinc-400 dark:text-zinc-500">Folder:</label>
                   <select
                     id="folder-select"
                     value={selectedNote.folder_id || ''}
                     onChange={(e) => handleMoveToFolder(selectedNote.id, e.target.value || null)}
-                    className="text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md px-2 py-1 text-slate-600 dark:text-slate-300 focus:ring-1 focus:ring-cyan-200 dark:focus:ring-cyan-500 outline-none"
+                    className="text-xs bg-slate-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md px-2 py-1 text-zinc-600 dark:text-zinc-300 focus:ring-1 focus:ring-cyan-200 dark:focus:ring-cyan-500 outline-none"
                   >
                     <option value="">No Folder</option>
                     {folders.filter(f => f.name.toLowerCase() !== 'archive').map(f => (
@@ -1228,7 +1355,7 @@ function NotesPageContent() {
                 {selectedNote.source_type === 'research' ? (
                   <>
                     {/* View/Edit Toggle for Research Notes */}
-                    <div className="flex items-center justify-between mb-4 pb-4 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center justify-between mb-4 pb-4 border-b border-zinc-100 dark:border-zinc-800">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => setResearchViewMode('view')}
@@ -1236,7 +1363,7 @@ function NotesPageContent() {
                             'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                             researchViewMode === 'view'
                               ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
-                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                           )}
                         >
                           <span className="flex items-center gap-1.5">
@@ -1250,7 +1377,7 @@ function NotesPageContent() {
                             'px-3 py-1.5 rounded-lg text-sm font-medium transition-all',
                             researchViewMode === 'edit'
                               ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-md'
-                              : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                              : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
                           )}
                         >
                           <span className="flex items-center gap-1.5">
@@ -1260,7 +1387,7 @@ function NotesPageContent() {
                         </button>
                       </div>
                       {researchViewMode === 'view' && (
-                        <span className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                        <span className="text-xs text-zinc-400 dark:text-zinc-500 flex items-center gap-1">
                           <span className="material-symbols-outlined text-[14px]">info</span>
                           AI-generated research brief
                         </span>
@@ -1276,6 +1403,7 @@ function NotesPageContent() {
                       />
                     ) : (
                       <NotesEditor
+                        ref={editorRef}
                         content={selectedNote.content || ''}
                         onUpdate={({ json, text }) => {
                           const wordCount = text.trim().split(/\s+/).filter(Boolean).length
@@ -1306,6 +1434,7 @@ function NotesPageContent() {
                 ) : (
                   /* Regular Note - TipTap Editor */
                   <NotesEditor
+                    ref={editorRef}
                     content={selectedNote.content || ''}
                     onUpdate={({ json, text }) => {
                       const wordCount = text.trim().split(/\s+/).filter(Boolean).length
@@ -1330,11 +1459,17 @@ function NotesPageContent() {
                   onLinkTask={() => setShowTaskLinker(true)}
                   isDemo={isDemo}
                 />
+
+                {/* Linked Projects Panel */}
+                <LinkedProjectsPanelForNotes
+                  noteId={selectedNote.id}
+                  isDemo={isDemo}
+                />
               </div>
 
               {/* Footer */}
-              <footer className="border-t border-slate-100 dark:border-slate-700 mt-8 pt-4">
-                <div className="flex flex-col sm:flex-row justify-between text-xs text-slate-400 dark:text-slate-500 gap-2">
+              <footer className="border-t border-zinc-100 dark:border-zinc-700 mt-8 pt-4">
+                <div className="flex flex-col sm:flex-row justify-between text-xs text-zinc-400 dark:text-zinc-500 gap-2">
                   <div className="flex gap-4">
                     <time dateTime={selectedNote.updated_at}>
                       Last edited {format(new Date(selectedNote.updated_at), 'MMM d, yyyy \'at\' h:mm a')}
@@ -1354,10 +1489,10 @@ function NotesPageContent() {
             <div className="max-w-5xl mx-auto">
               {/* Folder Header */}
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">
+                <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-1">
                   {currentFolderName}
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   {sortedNotes.length} {sortedNotes.length === 1 ? 'note' : 'notes'}
                 </p>
               </div>
@@ -1372,7 +1507,7 @@ function NotesPageContent() {
                       'text-left p-4 border rounded-xl hover:shadow-md transition-all group',
                       note.source_type === 'research'
                         ? 'bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 border-cyan-200 dark:border-cyan-700 hover:border-cyan-400 dark:hover:border-cyan-500'
-                        : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-cyan-300 dark:hover:border-cyan-600'
+                        : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-cyan-300 dark:hover:border-cyan-600'
                     )}
                   >
                     {/* Badges */}
@@ -1392,17 +1527,17 @@ function NotesPageContent() {
                     </div>
 
                     {/* Title */}
-                    <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-2 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                    <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-2 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
                       {note.title || 'Untitled Note'}
                     </h3>
 
                     {/* Preview */}
-                    <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-3 mb-3">
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-3 mb-3">
                       {note.content_text || 'No content'}
                     </p>
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between text-xs text-slate-400 dark:text-slate-500">
+                    <div className="flex items-center justify-between text-xs text-zinc-400 dark:text-zinc-500">
                       <span>{format(new Date(note.updated_at), 'MMM d, yyyy')}</span>
                       <div className="flex items-center gap-2">
                         {note.sources && note.sources.length > 0 && (
@@ -1436,16 +1571,16 @@ function NotesPageContent() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="folder-modal-title">
           <div
             ref={folderModalRef}
-            className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+            className="bg-white dark:bg-zinc-800 rounded-2xl p-6 w-full max-w-md shadow-2xl"
           >
-            <h3 id="folder-modal-title" className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">
+            <h3 id="folder-modal-title" className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4">
               {editingFolder ? 'Edit Folder' : 'New Folder'}
             </h3>
 
             <div className="flex flex-col gap-4">
               {/* Name */}
               <div>
-                <label htmlFor="folder-name" className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1 block">
+                <label htmlFor="folder-name" className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1 block">
                   Name
                 </label>
                 <input
@@ -1454,14 +1589,14 @@ function NotesPageContent() {
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   placeholder="Folder name"
-                  className="w-full px-4 py-3 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none placeholder-slate-400 dark:placeholder-slate-500"
+                  className="w-full px-4 py-3 border border-zinc-200 dark:border-zinc-600 bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none placeholder-zinc-400 dark:placeholder-zinc-500"
                   autoFocus
                 />
               </div>
 
               {/* Icon */}
               <fieldset>
-                <legend className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">
+                <legend className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2 block">
                   Icon
                 </legend>
                 <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Select folder icon">
@@ -1475,7 +1610,7 @@ function NotesPageContent() {
                         'p-2 rounded-lg transition-colors',
                         newFolderIcon === icon
                           ? 'bg-cyan-100 dark:bg-cyan-900/50 text-cyan-600 dark:text-cyan-400'
-                          : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
+                          : 'bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-600'
                       )}
                     >
                       <span className="material-symbols-outlined text-[20px]">{icon}</span>
@@ -1486,7 +1621,7 @@ function NotesPageContent() {
 
               {/* Color */}
               <fieldset>
-                <legend className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2 block">
+                <legend className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2 block">
                   Color
                 </legend>
                 <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Select folder color">
@@ -1499,7 +1634,7 @@ function NotesPageContent() {
                       aria-label={`Color ${color}`}
                       className={cn(
                         'w-8 h-8 rounded-lg transition-transform hover:scale-110',
-                        newFolderColor === color && 'ring-2 ring-offset-2 ring-slate-400 dark:ring-slate-500 dark:ring-offset-slate-800'
+                        newFolderColor === color && 'ring-2 ring-offset-2 ring-zinc-400 dark:ring-zinc-500 dark:ring-offset-zinc-800'
                       )}
                       style={{ backgroundColor: color }}
                     />
@@ -1513,7 +1648,7 @@ function NotesPageContent() {
               <button
                 type="button"
                 onClick={closeFolderModal}
-                className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                className="px-4 py-2 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded-xl transition-colors"
               >
                 Cancel
               </button>
@@ -1557,6 +1692,20 @@ function NotesPageContent() {
         note={selectedNote}
         isOpen={showShareDialog}
         onClose={() => setShowShareDialog(false)}
+      />
+
+      {/* Research Panel (AI Chat & Web Search) */}
+      <ResearchPanel
+        isOpen={isResearchPanelOpen}
+        onClose={() => setIsResearchPanelOpen(false)}
+        noteId={selectedNote?.id}
+        noteContent={selectedNote?.content_text}
+        onInsertToNote={(content) => {
+          if (selectedNote && editorRef.current) {
+            // Use the editor ref to insert content directly into TipTap
+            editorRef.current.insertContent(content)
+          }
+        }}
       />
     </div>
     </NotesErrorBoundary>

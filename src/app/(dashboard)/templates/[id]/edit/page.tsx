@@ -422,10 +422,10 @@ export default function EditTemplatePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-full bg-slate-50 dark:bg-transparent flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-600"></div>
-          <p className="text-slate-500">Loading template...</p>
+          <p className="text-slate-500 dark:text-zinc-400">Loading template...</p>
         </div>
       </div>
     )
@@ -434,29 +434,29 @@ export default function EditTemplatePage() {
   const visibleSections = sections.filter((s) => !s.isDeleted)
 
   return (
-    <div className="min-h-screen bg-slate-50" onClick={handlePageClick}>
+    <div className="min-h-full bg-slate-50 dark:bg-transparent" onClick={handlePageClick}>
       <div className="max-w-3xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Link
             href="/templates"
-            className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+            className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
           >
-            <span className="material-symbols-outlined text-slate-600" style={{ fontSize: '24px' }}>
+            <span className="material-symbols-outlined text-slate-600 dark:text-zinc-400" style={{ fontSize: '24px' }}>
               arrow_back
             </span>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Edit Template</h1>
-            <p className="text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Edit Template</h1>
+            <p className="text-slate-500 dark:text-zinc-400 mt-1">
               Modify your template and sections
             </p>
           </div>
         </div>
 
         {/* Template Info Card */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Template Details</h2>
+        <div className="bg-white dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 p-6 mb-6">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Template Details</h2>
 
           <div className="flex items-start gap-6">
             {/* Icon & Color Selection */}

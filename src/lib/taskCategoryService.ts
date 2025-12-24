@@ -99,23 +99,21 @@ export async function fetchCategoriesWithTodos(date: string): Promise<TaskCatego
     todos: processedTodos.filter(todo => todo.category_id === cat.id)
   })) || []
 
-  // Add uncategorized todos
+  // Add uncategorized todos - ALWAYS show this section
   const uncategorizedTodos = processedTodos.filter(todo => !todo.category_id)
-  if (uncategorizedTodos.length > 0) {
-    result.push({
-      id: 'uncategorized',
-      user_id: user.id,
-      name: 'Uncategorized',
-      icon: 'inbox',
-      color: '#64748b',
-      is_recurring: false,
-      order_index: 999,
-      is_active: true,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      todos: uncategorizedTodos,
-    })
-  }
+  result.push({
+    id: 'uncategorized',
+    user_id: user.id,
+    name: 'Uncategorized',
+    icon: 'inbox',
+    color: '#64748b',
+    is_recurring: false,
+    order_index: 999,
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    todos: uncategorizedTodos,
+  })
 
   return result
 }

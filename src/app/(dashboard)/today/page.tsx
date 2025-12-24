@@ -7,6 +7,7 @@ import { cn, linkifyText } from '@/lib/utils'
 import { useAuthStore } from '@/stores/authStore'
 import { isDemoAccount, demoTasksData } from '@/lib/demo'
 import { LinkedNotesPanel } from '@/components/notes'
+import { LinkedProjectsPanel } from '@/components/projects'
 import {
   fetchTaskCategories,
   fetchCategoriesWithTodos,
@@ -99,6 +100,7 @@ export default function TodayPage() {
   // Research state
   const [researchEnabled, setResearchEnabled] = useState(false)
   const [isResearching, setIsResearching] = useState<string | null>(null)
+  const [researchColdStart, setResearchColdStart] = useState(false)
 
   const categoryModalRef = useRef<HTMLDivElement>(null)
   const starterCategoriesCreated = useRef(false)
@@ -190,6 +192,14 @@ export default function TodayPage() {
         const status = await getResearchStatus()
         setResearchEnabled(status.enabled)
 
+        // Handle cold start scenario
+        if (status.coldStart) {
+          setResearchColdStart(true)
+          console.log('Research service is waking up (cold start)')
+        } else {
+          setResearchColdStart(false)
+        }
+
         if (status.enabled) {
           const automations = await getCategoryAutomations()
           const automationMap: Record<string, CategoryAutomation> = {}
@@ -200,6 +210,8 @@ export default function TodayPage() {
         }
       } catch (err) {
         console.error('Error checking research status:', err)
+        // Don't show error to user, just disable research features
+        setResearchEnabled(false)
       }
     }
     if (!isDemo) {
@@ -667,7 +679,7 @@ export default function TodayPage() {
       '#8b5cf6': { headerBg: 'bg-violet-50/40', headerBorder: 'border-violet-100/50', headerText: 'text-violet-800' },
       '#a855f7': { headerBg: 'bg-purple-50/40', headerBorder: 'border-purple-100/50', headerText: 'text-purple-800' },
       '#ec4899': { headerBg: 'bg-pink-50/40', headerBorder: 'border-pink-100/50', headerText: 'text-pink-800' },
-      '#64748b': { headerBg: 'bg-slate-50/40', headerBorder: 'border-slate-100/50', headerText: 'text-slate-800' },
+      '#64748b': { headerBg: 'bg-zinc-50 dark:bg-zinc-800/40', headerBorder: 'border-zinc-100 dark:border-zinc-800/50', headerText: 'text-zinc-800 dark:text-zinc-200' },
     }
     return colors[category.color] || colors['#64748b']
   }
@@ -687,15 +699,15 @@ export default function TodayPage() {
   ]
 
   return (
-    <div className="flex h-full overflow-hidden bg-slate-50">
+    <div className="flex h-full overflow-hidden bg-zinc-50 dark:bg-zinc-900">
       {/* Main Content */}
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <header className="shrink-0 bg-white border-b border-slate-200 px-6 py-4">
+        <header className="shrink-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-6 py-4">
           <div className="flex items-center justify-between gap-4">
             {/* Title & Badges */}
             <div className="flex items-center gap-4">
-              <h1 className="text-xl font-bold text-slate-900">My Tasks</h1>
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">My Tasks</h1>
               {dueTodayCount > 0 && (
                 <span className="px-2.5 py-1 bg-cyan-50 text-cyan-700 rounded-full text-xs font-semibold">
                   {dueTodayCount} Due Today
@@ -711,7 +723,7 @@ export default function TodayPage() {
             {/* Search Bar */}
             <div className="flex-1 max-w-md">
               <div className="relative">
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500 text-[20px]">
                   search
                 </span>
                 <input
@@ -719,9 +731,9 @@ export default function TodayPage() {
                   placeholder="Search tasks..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-16 py-2 bg-slate-100 border-0 rounded-lg text-sm placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-200 focus:bg-white transition-all outline-none"
+                  className="w-full pl-10 pr-16 py-2 bg-zinc-100 dark:bg-zinc-800 border-0 rounded-lg text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:ring-2 focus:ring-cyan-200 dark:focus:ring-cyan-700 focus:bg-white dark:focus:bg-zinc-700 transition-all outline-none"
                 />
-                <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-white rounded border border-slate-200 text-[10px] font-medium text-slate-400 shadow-sm">
+                <kbd className="absolute right-3 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-white dark:bg-zinc-700 rounded border border-zinc-200 dark:border-zinc-600 text-[10px] font-medium text-zinc-400 dark:text-zinc-500 shadow-sm">
                   ⌘K
                 </kbd>
               </div>
@@ -731,7 +743,7 @@ export default function TodayPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => openCategoryModal()}
-                className="flex items-center gap-1.5 px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors"
+                className="flex items-center gap-1.5 px-3 py-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:text-zinc-100 hover:bg-zinc-100 dark:bg-zinc-800 rounded-lg text-sm font-medium transition-colors"
               >
                 <span className="material-symbols-outlined text-[18px]">create_new_folder</span>
                 New Folder
@@ -754,7 +766,7 @@ export default function TodayPage() {
                 "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors",
                 activeFilter === 'high'
                   ? "bg-orange-100 text-orange-700"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-700"
               )}
             >
               <span className="material-symbols-outlined text-[14px]">priority_high</span>
@@ -775,7 +787,7 @@ export default function TodayPage() {
                   "shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-colors",
                   activeFilter === cat.id
                     ? "text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-700"
                 )}
                 style={activeFilter === cat.id ? { backgroundColor: cat.color } : {}}
               >
@@ -785,7 +797,7 @@ export default function TodayPage() {
             ))}
             <button
               onClick={() => openCategoryModal()}
-              className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors border border-dashed border-slate-300"
+              className="shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:bg-zinc-800 transition-colors border border-dashed border-zinc-300 dark:border-zinc-600"
             >
               <span className="material-symbols-outlined text-[14px]">add</span>
               New Folder
@@ -794,9 +806,9 @@ export default function TodayPage() {
         </header>
 
         {/* Add Task Bar */}
-        <div className="shrink-0 bg-white border-b border-slate-200 px-6 py-3">
+        <div className="shrink-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-6 py-3">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-slate-400 text-[20px]">add_circle</span>
+            <span className="material-symbols-outlined text-zinc-400 dark:text-zinc-500 text-[20px]">add_circle</span>
             <input
               type="text"
               placeholder="Add a new task..."
@@ -804,7 +816,7 @@ export default function TodayPage() {
               onChange={(e) => setNewTaskTitle(e.target.value)}
               onKeyDown={handleAddTask}
               disabled={isSaving}
-              className="flex-1 border-0 p-0 text-sm placeholder:text-slate-400 focus:ring-0 outline-none disabled:opacity-50"
+              className="flex-1 border-0 p-0 text-sm placeholder:text-zinc-400 dark:text-zinc-500 focus:ring-0 outline-none disabled:opacity-50"
             />
             <div className="flex items-center gap-2">
               <button
@@ -813,7 +825,7 @@ export default function TodayPage() {
                   "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
                   newTaskDueDate === format(new Date(), 'yyyy-MM-dd')
                     ? "bg-cyan-50 text-cyan-600"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-700"
                 )}
               >
                 <span className="material-symbols-outlined text-[14px]">today</span>
@@ -825,7 +837,7 @@ export default function TodayPage() {
                   "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors",
                   newTaskPriority === 'high'
                     ? "bg-red-50 text-red-600"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-700"
                 )}
               >
                 <span className="material-symbols-outlined text-[14px]">flag</span>
@@ -834,7 +846,7 @@ export default function TodayPage() {
               <select
                 value={newTaskCategoryId || ''}
                 onChange={(e) => setNewTaskCategoryId(e.target.value || null)}
-                className="text-xs bg-slate-100 border-0 rounded-lg px-2.5 py-1.5 text-slate-600 focus:ring-2 focus:ring-cyan-200"
+                className="text-xs bg-zinc-100 dark:bg-zinc-800 border-0 rounded-lg px-2.5 py-1.5 text-zinc-600 dark:text-zinc-400 focus:ring-2 focus:ring-cyan-200"
               >
                 <option value="">No folder</option>
                 {categories.filter(c => c.id !== 'uncategorized').map(cat => (
@@ -846,15 +858,15 @@ export default function TodayPage() {
         </div>
 
         {/* Tabs & Sort */}
-        <div className="shrink-0 bg-white border-b border-slate-200 px-6 py-2 flex items-center justify-between">
+        <div className="shrink-0 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-6 py-2 flex items-center justify-between">
           <div className="flex items-center gap-1">
             <button
               onClick={() => setActiveTab('all')}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                 activeTab === 'all'
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-100"
+                  ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-800"
               )}
             >
               All Tasks
@@ -864,8 +876,8 @@ export default function TodayPage() {
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                 activeTab === 'today'
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-100"
+                  ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-800"
               )}
             >
               My Day
@@ -875,19 +887,19 @@ export default function TodayPage() {
               className={cn(
                 "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
                 activeTab === 'recurring'
-                  ? "bg-slate-900 text-white"
-                  : "text-slate-600 hover:bg-slate-100"
+                  ? "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-800"
               )}
             >
               Recurring
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-slate-500">Sort by</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400">Sort by</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'priority' | 'dueDate' | 'name')}
-              className="text-xs bg-transparent border-0 text-slate-600 font-medium focus:ring-0 cursor-pointer"
+              className="text-xs bg-transparent border-0 text-zinc-600 dark:text-zinc-400 font-medium focus:ring-0 cursor-pointer"
             >
               <option value="priority">Priority</option>
               <option value="dueDate">Due Date</option>
@@ -904,12 +916,12 @@ export default function TodayPage() {
         )}
 
         {/* Task List */}
-        <div className="flex-1 overflow-y-auto bg-white">
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-zinc-900">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-8 h-8 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
-                <p className="text-sm text-slate-500">Loading tasks...</p>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">Loading tasks...</p>
               </div>
             </div>
           ) : groupedTasks.length > 0 ? (
@@ -920,27 +932,27 @@ export default function TodayPage() {
                 const styles = getCategoryStyles(category)
 
                 return (
-                  <div key={category.id} className="border-b border-slate-100">
+                  <div key={category.id} className="border-b border-zinc-100 dark:border-zinc-800">
                     {/* Category Header */}
                     <button
                       onClick={() => toggleCategoryExpand(category.id)}
-                      className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-slate-50 transition-colors"
+                      className="w-full px-4 py-2.5 flex items-center gap-2 hover:bg-zinc-50 dark:bg-zinc-800 transition-colors"
                       style={{ borderLeft: `3px solid ${category.color}` }}
                     >
-                      <span className={cn("material-symbols-outlined text-[18px] text-slate-400 transition-transform", !isExpanded && "-rotate-90")}>
+                      <span className={cn("material-symbols-outlined text-[18px] text-zinc-400 dark:text-zinc-500 transition-transform", !isExpanded && "-rotate-90")}>
                         {isExpanded ? 'expand_more' : 'chevron_right'}
                       </span>
                       <span className={cn("text-xs font-bold uppercase tracking-wide", styles.headerText)}>
                         {category.name} ({tasks.length})
                       </span>
                       {category.is_recurring && (
-                        <span className="material-symbols-outlined text-[14px] text-slate-400">repeat</span>
+                        <span className="material-symbols-outlined text-[14px] text-zinc-400 dark:text-zinc-500">repeat</span>
                       )}
                     </button>
 
                     {/* Tasks */}
                     {isExpanded && (
-                      <div className="divide-y divide-slate-100">
+                      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                         {tasks.map(task => {
                           const priorityInfo = getPriorityInfo(task.priority)
                           const isSelected = selectedTask?.id === task.id
@@ -953,7 +965,7 @@ export default function TodayPage() {
                               onClick={() => setSelectedTask(task)}
                               className={cn(
                                 "group flex items-center gap-4 px-4 py-3 cursor-pointer transition-colors",
-                                isSelected ? "bg-cyan-50/50" : "hover:bg-slate-50"
+                                isSelected ? "bg-cyan-50/50" : "hover:bg-zinc-50 dark:bg-zinc-800"
                               )}
                             >
                               {/* Checkbox */}
@@ -966,7 +978,7 @@ export default function TodayPage() {
                                   "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
                                   task.completed
                                     ? "bg-emerald-500 border-emerald-500 text-white"
-                                    : "border-slate-300 hover:border-cyan-500"
+                                    : "border-zinc-300 dark:border-zinc-600 hover:border-cyan-500"
                                 )}
                               >
                                 {task.completed && (
@@ -978,24 +990,24 @@ export default function TodayPage() {
                               <div className="flex-1 min-w-0">
                                 <div className={cn(
                                   "text-sm font-medium",
-                                  task.completed ? "text-slate-400 line-through" : "text-slate-800"
+                                  task.completed ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-800 dark:text-zinc-200"
                                 )}>
                                   {linkifyText(task.title)}
                                 </div>
                                 {task.notes && (
-                                  <div className="text-xs text-slate-400 truncate mt-0.5">
+                                  <div className="text-xs text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
                                     {task.notes.length > 50 ? task.notes.substring(0, 50) + '...' : task.notes}
                                   </div>
                                 )}
                               </div>
 
                               {/* Category Badge */}
-                              <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 rounded-full border border-slate-200">
+                              <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 bg-zinc-50 dark:bg-zinc-800 rounded-full border border-zinc-200 dark:border-zinc-700">
                                 <span
                                   className="w-2 h-2 rounded-full"
                                   style={{ backgroundColor: category.color }}
                                 ></span>
-                                <span className="text-xs font-medium text-slate-600">{category.name}</span>
+                                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{category.name}</span>
                               </div>
 
                               {/* Priority Badge */}
@@ -1013,7 +1025,7 @@ export default function TodayPage() {
                               {/* Due Date/Time */}
                               <div className={cn(
                                 "shrink-0 text-sm font-medium min-w-[100px] text-right",
-                                isOverdue ? "text-red-500" : task.completed ? "text-slate-400" : "text-slate-600"
+                                isOverdue ? "text-red-500" : task.completed ? "text-zinc-400 dark:text-zinc-500" : "text-zinc-600 dark:text-zinc-400"
                               )}>
                                 {dueDateTimeText || (task.dueTime ? task.dueTime : '—')}
                               </div>
@@ -1027,7 +1039,7 @@ export default function TodayPage() {
                                       handleTriggerResearch(task)
                                     }}
                                     disabled={isResearching === task.id}
-                                    className="p-1.5 text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors"
+                                    className="p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors"
                                     title="Research"
                                   >
                                     {isResearching === task.id ? (
@@ -1042,7 +1054,7 @@ export default function TodayPage() {
                                     e.stopPropagation()
                                     handleDeleteTask(task.id)
                                   }}
-                                  className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  className="p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                   title="Delete"
                                 >
                                   <span className="material-symbols-outlined text-[18px]">delete</span>
@@ -1060,9 +1072,9 @@ export default function TodayPage() {
           ) : (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
-                <span className="material-symbols-outlined text-6xl text-slate-300 mb-4 block">task_alt</span>
-                <h3 className="text-lg font-bold text-slate-900 mb-2">No tasks found</h3>
-                <p className="text-sm text-slate-500">
+                <span className="material-symbols-outlined text-6xl text-zinc-300 dark:text-zinc-600 mb-4 block">task_alt</span>
+                <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">No tasks found</h3>
+                <p className="text-sm text-zinc-500 dark:text-zinc-400">
                   {searchQuery ? 'Try a different search term' : 'Add your first task using the input above'}
                 </p>
               </div>
@@ -1073,13 +1085,13 @@ export default function TodayPage() {
 
       {/* Task Details Sidebar - Only shows when a task is selected */}
       {selectedTask && (
-        <aside className="w-80 lg:w-96 shrink-0 bg-white border-l border-slate-200 flex flex-col h-full overflow-hidden transition-all duration-300 animate-in slide-in-from-right-4">
+        <aside className="w-80 lg:w-96 shrink-0 bg-white dark:bg-zinc-900 border-l border-zinc-200 dark:border-zinc-800 flex flex-col h-full overflow-hidden transition-all duration-300 animate-in slide-in-from-right-4">
             {/* Sidebar Header */}
-            <div className="shrink-0 px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Task Details</span>
+            <div className="shrink-0 px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Task Details</span>
               <button
                 onClick={() => setSelectedTask(null)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-800 rounded-lg transition-colors"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
@@ -1097,17 +1109,17 @@ export default function TodayPage() {
                         "w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors shrink-0",
                         selectedTask.completed
                           ? "bg-cyan-600 border-cyan-600 text-white"
-                          : "border-slate-300 hover:border-cyan-600"
+                          : "border-zinc-300 dark:border-zinc-600 hover:border-cyan-600"
                       )}
                     >
                       {selectedTask.completed && (
                         <span className="material-symbols-outlined text-[14px]">check</span>
                       )}
                     </button>
-                    <span className="text-sm text-slate-500">Mark as complete</span>
+                    <span className="text-sm text-zinc-500 dark:text-zinc-400">Mark as complete</span>
                   </div>
                   <textarea
-                    className="w-full bg-transparent border-0 p-0 text-lg font-bold text-slate-900 focus:ring-0 resize-none outline-none leading-tight"
+                    className="w-full bg-transparent border-0 p-0 text-lg font-bold text-zinc-900 dark:text-zinc-100 focus:ring-0 resize-none outline-none leading-tight"
                     placeholder="Task title"
                     rows={2}
                     value={selectedTask.title}
@@ -1143,19 +1155,19 @@ export default function TodayPage() {
 
                 {/* Due Date */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Due Date</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Due Date</label>
                   <input
                     type="date"
                     value={selectedTask.dueDate || ''}
                     onChange={(e) => handleUpdateTask(selectedTask.id, { dueDate: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 outline-none"
+                    className="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-700 dark:text-zinc-300 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 outline-none"
                     disabled={isDemo}
                   />
                 </div>
 
                 {/* Priority */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Priority</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Priority</label>
                   <div className="flex gap-2">
                     {(['high', 'medium', 'low'] as const).map(p => {
                       const info = getPriorityInfo(p)
@@ -1168,7 +1180,7 @@ export default function TodayPage() {
                             "flex-1 py-2 text-[10px] font-bold uppercase tracking-wide rounded-lg transition-all",
                             isActive
                               ? cn(info.bg, info.color, info.border, "ring-2 ring-offset-1", p === 'high' ? "ring-orange-300" : p === 'medium' ? "ring-orange-200" : "ring-blue-200")
-                              : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-700"
                           )}
                         >
                           {info.label}
@@ -1180,11 +1192,11 @@ export default function TodayPage() {
 
                 {/* Project */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Project</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Project</label>
                   <select
                     value={selectedTask.category_id || ''}
                     onChange={(e) => handleMoveToCategory(selectedTask.id, e.target.value || null)}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 outline-none appearance-none cursor-pointer"
+                    className="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-700 dark:text-zinc-300 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 outline-none appearance-none cursor-pointer"
                     disabled={isDemo}
                   >
                     <option value="">Uncategorized</option>
@@ -1196,7 +1208,7 @@ export default function TodayPage() {
 
                 {/* Tags */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Tags</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Tags</label>
                   <div className="flex flex-wrap gap-2">
                     {selectedTask.priority === 'high' && (
                       <span className="px-2 py-1 bg-red-50 text-red-600 rounded-md text-xs font-medium">urgent</span>
@@ -1204,7 +1216,7 @@ export default function TodayPage() {
                     {categories.find(c => c.id === selectedTask.category_id)?.is_recurring && (
                       <span className="px-2 py-1 bg-purple-50 text-purple-600 rounded-md text-xs font-medium">recurring</span>
                     )}
-                    <button className="px-2 py-1 bg-slate-100 text-slate-500 rounded-md text-xs font-medium hover:bg-slate-200 transition-colors">
+                    <button className="px-2 py-1 bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 rounded-md text-xs font-medium hover:bg-zinc-200 dark:bg-zinc-700 transition-colors">
                       + Add tag
                     </button>
                   </div>
@@ -1212,9 +1224,9 @@ export default function TodayPage() {
 
                 {/* Description */}
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Description</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Description</label>
                   <textarea
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 resize-none outline-none leading-relaxed"
+                    className="w-full px-3 py-2.5 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-sm text-zinc-700 dark:text-zinc-300 focus:ring-2 focus:ring-cyan-200 focus:border-cyan-400 resize-none outline-none leading-relaxed"
                     placeholder="Add a description..."
                     rows={4}
                     value={selectedTask.notes || ''}
@@ -1225,10 +1237,10 @@ export default function TodayPage() {
                 {/* Subtasks Preview */}
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-400">Subtasks</label>
-                    <span className="text-xs text-slate-400">0/0</span>
+                    <label className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">Subtasks</label>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">0/0</span>
                   </div>
-                  <button className="w-full py-2.5 text-sm text-slate-500 bg-slate-50 border border-dashed border-slate-200 rounded-xl hover:bg-slate-100 hover:text-slate-700 transition-colors">
+                  <button className="w-full py-2.5 text-sm text-zinc-500 dark:text-zinc-400 bg-zinc-50 dark:bg-zinc-800 border border-dashed border-zinc-200 dark:border-zinc-700 rounded-xl hover:bg-zinc-100 dark:bg-zinc-800 hover:text-zinc-700 dark:text-zinc-300 transition-colors">
                     + Add subtask
                   </button>
                 </div>
@@ -1239,12 +1251,18 @@ export default function TodayPage() {
                   onNoteClick={(noteId) => router.push(`/notes?note=${noteId}`)}
                   isDemo={isDemo}
                 />
+
+                {/* Linked Projects */}
+                <LinkedProjectsPanel
+                  taskId={selectedTask.id}
+                  isDemo={isDemo}
+                />
               </div>
             </div>
 
             {/* Sidebar Footer */}
-            <div className="shrink-0 px-6 py-4 border-t border-slate-200 flex items-center justify-between">
-              <span className="text-xs text-slate-400">
+            <div className="shrink-0 px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 flex items-center justify-between">
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">
                 Created {selectedTask.dueDate ? format(new Date(selectedTask.dueDate), 'MMM d, yyyy') : 'Today'}
               </span>
               <button
@@ -1265,14 +1283,14 @@ export default function TodayPage() {
             ref={categoryModalRef}
             className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl"
           >
-            <h3 className="text-lg font-bold text-slate-900 mb-4">
+            <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-4">
               {editingCategory ? 'Edit Folder' : 'New Folder'}
             </h3>
 
             <div className="flex flex-col gap-4">
               {/* Name */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1 block">
+                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-1 block">
                   Name
                 </label>
                 <input
@@ -1280,13 +1298,13 @@ export default function TodayPage() {
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="Folder name"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none"
+                  className="w-full px-4 py-3 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:ring-2 focus:ring-cyan-500 focus:border-transparent outline-none"
                 />
               </div>
 
               {/* Icon */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">
+                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2 block">
                   Icon
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -1298,7 +1316,7 @@ export default function TodayPage() {
                         'p-2 rounded-lg transition-colors',
                         newCategoryIcon === icon
                           ? 'bg-cyan-100 text-cyan-600'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-700'
                       )}
                     >
                       <span className="material-symbols-outlined text-[20px]">{icon}</span>
@@ -1309,7 +1327,7 @@ export default function TodayPage() {
 
               {/* Color */}
               <div>
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">
+                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-2 block">
                   Color
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -1319,7 +1337,7 @@ export default function TodayPage() {
                       onClick={() => setNewCategoryColor(color)}
                       className={cn(
                         'w-8 h-8 rounded-lg transition-transform hover:scale-110',
-                        newCategoryColor === color && 'ring-2 ring-offset-2 ring-slate-400'
+                        newCategoryColor === color && 'ring-2 ring-offset-2 ring-zinc-400 dark:ring-zinc-500'
                       )}
                       style={{ backgroundColor: color }}
                     />
@@ -1334,19 +1352,19 @@ export default function TodayPage() {
                   id="isRecurring"
                   checked={newCategoryIsRecurring}
                   onChange={(e) => setNewCategoryIsRecurring(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                  className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-cyan-600 focus:ring-cyan-500"
                 />
-                <label htmlFor="isRecurring" className="text-sm text-slate-700">
+                <label htmlFor="isRecurring" className="text-sm text-zinc-700 dark:text-zinc-300">
                   Daily recurring tasks
                 </label>
               </div>
 
               {/* Research Automation */}
               {researchEnabled && (
-                <div className="border-t border-slate-200 pt-4 mt-2">
+                <div className="border-t border-zinc-200 dark:border-zinc-700 pt-4 mt-2">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="material-symbols-outlined text-cyan-600 text-[20px]">science</span>
-                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
                       Research Automation
                     </span>
                   </div>
@@ -1357,9 +1375,9 @@ export default function TodayPage() {
                       id="enableAutomation"
                       checked={enableAutomation}
                       onChange={(e) => setEnableAutomation(e.target.checked)}
-                      className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                      className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-cyan-600 focus:ring-cyan-500"
                     />
-                    <label htmlFor="enableAutomation" className="text-sm text-slate-700">
+                    <label htmlFor="enableAutomation" className="text-sm text-zinc-700 dark:text-zinc-300">
                       Auto-research new tasks
                     </label>
                   </div>
@@ -1367,7 +1385,7 @@ export default function TodayPage() {
                   {enableAutomation && (
                     <div className="space-y-3 pl-7 border-l-2 border-cyan-100">
                       <div>
-                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">
                           Research Depth
                         </label>
                         <div className="flex gap-2">
@@ -1380,7 +1398,7 @@ export default function TodayPage() {
                                 'px-3 py-1.5 text-xs rounded-lg font-medium transition-colors capitalize',
                                 automationResearchDepth === depth
                                   ? 'bg-cyan-100 text-cyan-700'
-                                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                  : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:bg-zinc-700'
                               )}
                             >
                               {depth}
@@ -1390,7 +1408,7 @@ export default function TodayPage() {
                       </div>
 
                       <div>
-                        <label className="text-xs font-medium text-slate-600 mb-1 block">
+                        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1 block">
                           Max Sources: {automationMaxSources}
                         </label>
                         <input
@@ -1399,7 +1417,7 @@ export default function TodayPage() {
                           max="10"
                           value={automationMaxSources}
                           onChange={(e) => setAutomationMaxSources(Number(e.target.value))}
-                          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-cyan-600"
+                          className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-cyan-600"
                         />
                       </div>
 
@@ -1409,9 +1427,9 @@ export default function TodayPage() {
                           id="askClarification"
                           checked={automationAskClarification}
                           onChange={(e) => setAutomationAskClarification(e.target.checked)}
-                          className="w-4 h-4 rounded border-slate-300 text-cyan-600 focus:ring-cyan-500"
+                          className="w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-cyan-600 focus:ring-cyan-500"
                         />
-                        <label htmlFor="askClarification" className="text-xs text-slate-600">
+                        <label htmlFor="askClarification" className="text-xs text-zinc-600 dark:text-zinc-400">
                           Ask for clarification before researching
                         </label>
                       </div>
@@ -1425,7 +1443,7 @@ export default function TodayPage() {
             <div className="flex items-center justify-end gap-3 mt-6">
               <button
                 onClick={closeCategoryModal}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-800 rounded-xl transition-colors"
               >
                 Cancel
               </button>

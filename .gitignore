@@ -49,3 +49,4 @@ next-env.d.ts
 # telegram-bot
 telegram-bot/node_modules
 telegram-bot/dist
+nul

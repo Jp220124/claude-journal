@@ -97,13 +97,57 @@ async function apiRequest<T>(
 
 /**
  * Check if research is enabled on the backend
+ * Note: The research API on Render Free tier may take 50+ seconds to cold start
  */
 export async function getResearchStatus(): Promise<{
   enabled: boolean
   features: { exa: boolean; tavily: boolean }
+  coldStart?: boolean
+  error?: string
 }> {
-  const response = await fetch(`${RESEARCH_API_URL}/api/research/status`)
-  return response.json()
+  try {
+    // Create an AbortController for timeout
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
+
+    const response = await fetch(`${RESEARCH_API_URL}/api/research/status`, {
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    if (!response.ok) {
+      return {
+        enabled: false,
+        features: { exa: false, tavily: false },
+        error: `Server returned ${response.status}`,
+      }
+    }
+
+    return response.json()
+  } catch (error) {
+    // Handle cold start / timeout gracefully
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        return {
+          enabled: false,
+          features: { exa: false, tavily: false },
+          coldStart: true,
+          error: 'Research service is waking up. Please try again in a moment.',
+        }
+      }
+      return {
+        enabled: false,
+        features: { exa: false, tavily: false },
+        error: error.message,
+      }
+    }
+    return {
+      enabled: false,
+      features: { exa: false, tavily: false },
+      error: 'Failed to connect to research service',
+    }
+  }
 }
 
 /**

@@ -335,21 +335,21 @@ export default function NewTemplatePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50" onClick={handlePageClick}>
+    <div className="min-h-full bg-slate-50 dark:bg-transparent" onClick={handlePageClick}>
       <div className="max-w-3xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <Link
             href="/templates"
-            className="p-2 hover:bg-slate-100 rounded-xl transition-colors"
+            className="p-2 hover:bg-slate-100 dark:hover:bg-zinc-800 rounded-xl transition-colors"
           >
-            <span className="material-symbols-outlined text-slate-600" style={{ fontSize: '24px' }}>
+            <span className="material-symbols-outlined text-slate-600 dark:text-zinc-400" style={{ fontSize: '24px' }}>
               arrow_back
             </span>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Create Template</h1>
-            <p className="text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Create Template</h1>
+            <p className="text-slate-500 dark:text-zinc-400 mt-1">
               Design a custom template for structured journaling
             </p>
           </div>
