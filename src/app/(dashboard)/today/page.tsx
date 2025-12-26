@@ -9,6 +9,23 @@ import { isDemoAccount, demoTasksData } from '@/lib/demo'
 import { LinkedNotesPanel } from '@/components/notes'
 import { LinkedProjectsPanel } from '@/components/projects'
 import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   fetchTaskCategories,
   fetchCategoriesWithTodos,
   createTaskCategory,
@@ -21,6 +38,7 @@ import {
   toggleTodoComplete,
   deleteTodo,
   moveTodoToCategory,
+  reorderTasksInCategory,
 } from '@/lib/taskCategoryService'
 import {
   triggerResearch,
@@ -59,6 +77,171 @@ const todoToTask = (todo: Todo): Task => ({
   recurrence: todo.recurrence || undefined,
   notes: todo.notes || undefined,
 })
+
+// Props for SortableTaskItem
+interface SortableTaskItemProps {
+  task: Task
+  category: TaskCategoryWithTodos
+  isSelected: boolean
+  isOverdue: boolean
+  dateStr: string
+  priorityInfo: { label: string; color: string; bg: string; border: string }
+  dueDateTimeText: string | null
+  researchEnabled: boolean
+  isResearching: string | null
+  onSelect: () => void
+  onToggleComplete: () => void
+  onDelete: () => void
+  onTriggerResearch: () => void
+}
+
+// Sortable task item component
+function SortableTaskItem({
+  task,
+  category,
+  isSelected,
+  isOverdue,
+  priorityInfo,
+  dueDateTimeText,
+  researchEnabled,
+  isResearching,
+  onSelect,
+  onToggleComplete,
+  onDelete,
+  onTriggerResearch,
+}: SortableTaskItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 'auto',
+  }
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      onClick={onSelect}
+      className={cn(
+        "group flex items-center gap-4 px-4 py-3 cursor-pointer transition-colors",
+        isSelected ? "bg-cyan-50/50" : "hover:bg-zinc-50 dark:hover:bg-zinc-800",
+        isDragging && "shadow-lg bg-white dark:bg-zinc-800 rounded-lg"
+      )}
+    >
+      {/* Drag Handle */}
+      <button
+        {...attributes}
+        {...listeners}
+        className="shrink-0 p-1 text-zinc-300 dark:text-zinc-600 hover:text-zinc-400 dark:hover:text-zinc-500 cursor-grab active:cursor-grabbing touch-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <span className="material-symbols-outlined text-[18px]">drag_indicator</span>
+      </button>
+
+      {/* Checkbox */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggleComplete()
+        }}
+        className={cn(
+          "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
+          task.completed
+            ? "bg-emerald-500 border-emerald-500 text-white"
+            : "border-zinc-300 dark:border-zinc-600 hover:border-cyan-500"
+        )}
+      >
+        {task.completed && (
+          <span className="material-symbols-outlined text-[14px]">check</span>
+        )}
+      </button>
+
+      {/* Task Content */}
+      <div className="flex-1 min-w-0">
+        <div className={cn(
+          "text-sm font-medium",
+          task.completed ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-800 dark:text-zinc-200"
+        )}>
+          {linkifyText(task.title)}
+        </div>
+        {task.notes && (
+          <div className="text-xs text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
+            {task.notes.length > 50 ? task.notes.substring(0, 50) + '...' : task.notes}
+          </div>
+        )}
+      </div>
+
+      {/* Category Badge */}
+      <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 bg-zinc-50 dark:bg-zinc-800 rounded-full border border-zinc-200 dark:border-zinc-700">
+        <span
+          className="w-2 h-2 rounded-full"
+          style={{ backgroundColor: category.color }}
+        ></span>
+        <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{category.name}</span>
+      </div>
+
+      {/* Priority Badge */}
+      {!task.completed && (
+        <span className={cn(
+          "shrink-0 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide",
+          priorityInfo.bg,
+          priorityInfo.color,
+          priorityInfo.border
+        )}>
+          {priorityInfo.label}
+        </span>
+      )}
+
+      {/* Due Date/Time */}
+      <div className={cn(
+        "shrink-0 text-sm font-medium min-w-[100px] text-right",
+        isOverdue ? "text-red-500" : task.completed ? "text-zinc-400 dark:text-zinc-500" : "text-zinc-600 dark:text-zinc-400"
+      )}>
+        {dueDateTimeText || (task.dueTime ? task.dueTime : '—')}
+      </div>
+
+      {/* Hover Actions */}
+      <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {researchEnabled && !task.completed && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onTriggerResearch()
+            }}
+            disabled={isResearching === task.id}
+            className="p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors"
+            title="Research"
+          >
+            {isResearching === task.id ? (
+              <div className="w-4 h-4 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
+            ) : (
+              <span className="material-symbols-outlined text-[18px]">science</span>
+            )}
+          </button>
+        )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          className="p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          title="Delete"
+        >
+          <span className="material-symbols-outlined text-[18px]">delete</span>
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export default function TodayPage() {
   const router = useRouter()
@@ -105,6 +288,18 @@ export default function TodayPage() {
   const categoryModalRef = useRef<HTMLDivElement>(null)
   const starterCategoriesCreated = useRef(false)
 
+  // DnD sensors with activation distance to prevent accidental drags
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
   const today = new Date()
   const dateStr = format(today, 'yyyy-MM-dd')
 
@@ -132,7 +327,7 @@ export default function TodayPage() {
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        todos: demoTasksData.map(t => ({
+        todos: demoTasksData.map((t, index) => ({
           id: t.id,
           user_id: 'demo',
           title: t.title,
@@ -145,6 +340,7 @@ export default function TodayPage() {
           recurrence: t.recurrence || null,
           notes: t.notes || null,
           completed_date: t.completed ? dateStr : null,
+          order_index: index,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })),
@@ -388,6 +584,46 @@ export default function TodayPage() {
       await loadData()
     } catch (error) {
       console.error('Error moving task:', error)
+    }
+  }
+
+  // Handle drag end for task reordering within a category
+  const handleDragEnd = async (event: DragEndEvent, categoryId: string, categoryTasks: Task[]) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) return
+
+    const oldIndex = categoryTasks.findIndex(t => t.id === active.id)
+    const newIndex = categoryTasks.findIndex(t => t.id === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) return
+
+    // Reorder tasks array
+    const reorderedTasks = arrayMove(categoryTasks, oldIndex, newIndex)
+    const taskIds = reorderedTasks.map(t => t.id)
+
+    // Optimistic update: update local state immediately
+    setCategories(prev => prev.map(cat => {
+      if (cat.id === categoryId) {
+        const reorderedTodos = arrayMove(
+          cat.todos,
+          cat.todos.findIndex(t => t.id === active.id),
+          cat.todos.findIndex(t => t.id === over.id)
+        )
+        return { ...cat, todos: reorderedTodos }
+      }
+      return cat
+    }))
+
+    // Persist to database
+    if (!isDemo) {
+      try {
+        await reorderTasksInCategory(categoryId, taskIds)
+      } catch (error) {
+        console.error('Error reordering tasks:', error)
+        // Reload data on error to restore correct order
+        await loadData()
+      }
     }
   }
 
@@ -950,120 +1186,46 @@ export default function TodayPage() {
                       )}
                     </button>
 
-                    {/* Tasks */}
+                    {/* Tasks with Drag and Drop */}
                     {isExpanded && (
-                      <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                        {tasks.map(task => {
-                          const priorityInfo = getPriorityInfo(task.priority)
-                          const isSelected = selectedTask?.id === task.id
-                          const isOverdue = task.dueDate && task.dueDate < dateStr
-                          const dueDateTimeText = formatDueDateTime(task.dueDate, task.dueTime)
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={(event) => handleDragEnd(event, category.id, tasks)}
+                      >
+                        <SortableContext
+                          items={tasks.map(t => t.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                            {tasks.map(task => {
+                              const priorityInfo = getPriorityInfo(task.priority)
+                              const isSelected = selectedTask?.id === task.id
+                              const isOverdue = !!(task.dueDate && task.dueDate < dateStr)
+                              const dueDateTimeText = formatDueDateTime(task.dueDate, task.dueTime)
 
-                          return (
-                            <div
-                              key={task.id}
-                              onClick={() => setSelectedTask(task)}
-                              className={cn(
-                                "group flex items-center gap-4 px-4 py-3 cursor-pointer transition-colors",
-                                isSelected ? "bg-cyan-50/50" : "hover:bg-zinc-50 dark:bg-zinc-800"
-                              )}
-                            >
-                              {/* Checkbox */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleToggleComplete(task.id)
-                                }}
-                                className={cn(
-                                  "shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all",
-                                  task.completed
-                                    ? "bg-emerald-500 border-emerald-500 text-white"
-                                    : "border-zinc-300 dark:border-zinc-600 hover:border-cyan-500"
-                                )}
-                              >
-                                {task.completed && (
-                                  <span className="material-symbols-outlined text-[14px]">check</span>
-                                )}
-                              </button>
-
-                              {/* Task Content */}
-                              <div className="flex-1 min-w-0">
-                                <div className={cn(
-                                  "text-sm font-medium",
-                                  task.completed ? "text-zinc-400 dark:text-zinc-500 line-through" : "text-zinc-800 dark:text-zinc-200"
-                                )}>
-                                  {linkifyText(task.title)}
-                                </div>
-                                {task.notes && (
-                                  <div className="text-xs text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
-                                    {task.notes.length > 50 ? task.notes.substring(0, 50) + '...' : task.notes}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Category Badge */}
-                              <div className="shrink-0 flex items-center gap-1.5 px-2.5 py-1 bg-zinc-50 dark:bg-zinc-800 rounded-full border border-zinc-200 dark:border-zinc-700">
-                                <span
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ backgroundColor: category.color }}
-                                ></span>
-                                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{category.name}</span>
-                              </div>
-
-                              {/* Priority Badge */}
-                              {!task.completed && (
-                                <span className={cn(
-                                  "shrink-0 px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-wide",
-                                  priorityInfo.bg,
-                                  priorityInfo.color,
-                                  priorityInfo.border
-                                )}>
-                                  {priorityInfo.label}
-                                </span>
-                              )}
-
-                              {/* Due Date/Time */}
-                              <div className={cn(
-                                "shrink-0 text-sm font-medium min-w-[100px] text-right",
-                                isOverdue ? "text-red-500" : task.completed ? "text-zinc-400 dark:text-zinc-500" : "text-zinc-600 dark:text-zinc-400"
-                              )}>
-                                {dueDateTimeText || (task.dueTime ? task.dueTime : '—')}
-                              </div>
-
-                              {/* Hover Actions */}
-                              <div className="shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                {researchEnabled && !task.completed && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleTriggerResearch(task)
-                                    }}
-                                    disabled={isResearching === task.id}
-                                    className="p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-lg transition-colors"
-                                    title="Research"
-                                  >
-                                    {isResearching === task.id ? (
-                                      <div className="w-4 h-4 border-2 border-cyan-600 border-t-transparent rounded-full animate-spin"></div>
-                                    ) : (
-                                      <span className="material-symbols-outlined text-[18px]">science</span>
-                                    )}
-                                  </button>
-                                )}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleDeleteTask(task.id)
-                                  }}
-                                  className="p-1.5 text-zinc-400 dark:text-zinc-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Delete"
-                                >
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                </button>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
+                              return (
+                                <SortableTaskItem
+                                  key={task.id}
+                                  task={task}
+                                  category={category}
+                                  isSelected={isSelected}
+                                  isOverdue={isOverdue}
+                                  dateStr={dateStr}
+                                  priorityInfo={priorityInfo}
+                                  dueDateTimeText={dueDateTimeText}
+                                  researchEnabled={researchEnabled}
+                                  isResearching={isResearching}
+                                  onSelect={() => setSelectedTask(task)}
+                                  onToggleComplete={() => handleToggleComplete(task.id)}
+                                  onDelete={() => handleDeleteTask(task.id)}
+                                  onTriggerResearch={() => handleTriggerResearch(task)}
+                                />
+                              )
+                            })}
+                          </div>
+                        </SortableContext>
+                      </DndContext>
                     )}
                   </div>
                 )

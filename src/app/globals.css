@@ -29,7 +29,7 @@
   /* Text hierarchy */
   --foreground: #18181b;
   --foreground-secondary: #52525b;
-  --foreground-muted: #a1a1aa;
+  --foreground-muted: #71717a; /* Improved contrast for WCAG AA compliance */
 
   /* Semantic surfaces */
   --card: #ffffff;
@@ -39,7 +39,7 @@
 
   /* Muted/Secondary surfaces */
   --muted: #f4f4f5;
-  --muted-foreground: #71717a;
+  --muted-foreground: #52525b; /* Improved contrast for WCAG AA compliance */
   --secondary: #f4f4f5;
   --secondary-foreground: #18181b;
   --accent: #f4f4f5;
@@ -110,7 +110,7 @@
 
   /* Muted/Secondary surfaces */
   --muted: #27272a;
-  --muted-foreground: #a1a1aa;
+  --muted-foreground: #d4d4d8; /* Improved contrast for WCAG AA compliance in dark mode */
   --secondary: #27272a;
   --secondary-foreground: #fafafa;
   --accent: #27272a;

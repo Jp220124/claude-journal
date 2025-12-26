@@ -16,6 +16,7 @@ interface SidebarProps {
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
   { href: '/today', label: 'Today', icon: 'check_box' },
+  { href: '/schedule', label: 'Schedule', icon: 'schedule' },
   { href: '/projects', label: 'Projects', icon: 'rocket_launch' },
   { href: '/journal', label: 'Journal', icon: 'book' },
   { href: '/notes', label: 'Notes', icon: 'edit_note' },
@@ -56,6 +57,7 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
         {/* Collapse/Expand Toggle - Half circle on right edge */}
         <button
           onClick={onToggleCollapse}
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className="hidden lg:flex absolute top-24 right-0 translate-x-full w-5 h-10 items-center justify-center bg-zinc-800 dark:bg-zinc-800 border border-zinc-700 dark:border-zinc-600 border-l-0 rounded-r-full hover:bg-zinc-700 dark:hover:bg-zinc-700 transition-all z-50"
           title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
@@ -95,6 +97,7 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
           {/* Mobile close button */}
           <button
             onClick={onClose}
+            aria-label="Close sidebar"
             className="lg:hidden absolute top-4 right-4 p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400"
           >
             <span className="material-symbols-outlined">close</span>
@@ -110,15 +113,20 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
                   key={item.href}
                   href={item.href}
                   onClick={onClose}
+                  aria-current={isActive ? 'page' : undefined}
                   title={isCollapsed ? item.label : undefined}
                   className={cn(
-                    'group flex items-center rounded-xl transition-all',
+                    'group flex items-center rounded-xl transition-all relative',
                     isCollapsed ? 'justify-center px-3 py-3' : 'gap-3 px-4 py-3',
                     isActive
-                      ? 'bg-cyan-500/10 dark:bg-cyan-500/15 border border-cyan-500/20 dark:border-cyan-500/30 text-cyan-600 dark:text-cyan-400'
+                      ? 'bg-cyan-500/10 dark:bg-cyan-500/20 border border-cyan-500/30 dark:border-cyan-500/40 text-cyan-600 dark:text-cyan-400 shadow-sm shadow-cyan-500/10'
                       : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100'
                   )}
                 >
+                  {/* Active indicator bar */}
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-cyan-500 rounded-r-full" />
+                  )}
                   <span
                     className={cn(
                       "material-symbols-outlined flex-shrink-0",
@@ -157,6 +165,7 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
 
           <Link
             href="/settings"
+            aria-label="Settings"
             title={isCollapsed ? 'Settings' : undefined}
             className={cn(
               "flex items-center rounded-xl text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors",
@@ -171,6 +180,7 @@ export function Sidebar({ isOpen = true, onClose, isCollapsed = false, onToggleC
 
           <button
             onClick={handleSignOut}
+            aria-label="Sign out"
             title={isCollapsed ? 'Sign Out' : undefined}
             className={cn(
               "flex items-center rounded-xl text-zinc-500 dark:text-zinc-400 hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors w-full",

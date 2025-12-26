@@ -36,10 +36,9 @@ import type {
   ProjectFile,
 } from '@/types/projects'
 import { markdownToHtml } from '@/lib/markdownToTiptap'
-import ProjectAIChat from '@/components/projects/ProjectAIChat'
 
 // Tab types
-type TabType = 'overview' | 'tasks' | 'notes' | 'calendar' | 'files' | 'ai'
+type TabType = 'overview' | 'tasks' | 'notes' | 'calendar' | 'files'
 
 const TABS: { id: TabType; label: string; icon: string }[] = [
   { id: 'overview', label: 'Overview', icon: 'dashboard' },
@@ -47,7 +46,6 @@ const TABS: { id: TabType; label: string; icon: string }[] = [
   { id: 'notes', label: 'Notes', icon: 'description' },
   { id: 'calendar', label: 'Calendar', icon: 'calendar_month' },
   { id: 'files', label: 'Files', icon: 'folder_open' },
-  { id: 'ai', label: 'AI Assistant', icon: 'smart_toy' },
 ]
 
 // Status info
@@ -417,10 +415,6 @@ export default function ProjectDetailPage() {
         case '5':
           e.preventDefault()
           setActiveTab('files')
-          break
-        case '6':
-          e.preventDefault()
-          setActiveTab('ai')
           break
         case '?':
           e.preventDefault()
@@ -2481,17 +2475,6 @@ export default function ProjectDetailPage() {
             </div>
           </div>
         )}
-
-        {/* AI Assistant Tab */}
-        {activeTab === 'ai' && project && (
-          <div className="h-[calc(100vh-280px)] min-h-[500px]">
-            <ProjectAIChat
-              projectId={project.id}
-              projectName={project.name}
-              className="h-full"
-            />
-          </div>
-        )}
       </div>
 
       {/* Task Linker Modal */}
@@ -2986,7 +2969,6 @@ export default function ProjectDetailPage() {
                     { key: '3', action: 'Notes Tab' },
                     { key: '4', action: 'Calendar Tab' },
                     { key: '5', action: 'Files Tab' },
-                    { key: '6', action: 'AI Assistant' },
                   ].map(({ key, action }) => (
                     <div key={key} className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50">
                       <span className="text-sm text-zinc-700 dark:text-zinc-300">{action}</span>
@@ -3021,19 +3003,6 @@ export default function ProjectDetailPage() {
         <span className="material-symbols-outlined text-[18px] text-zinc-500 dark:text-zinc-400 group-hover:text-violet-500">keyboard</span>
         <span className="text-xs text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-700 dark:group-hover:text-zinc-300">Press <kbd className="px-1.5 py-0.5 bg-zinc-100 dark:bg-zinc-700 rounded text-[10px] font-mono font-semibold mx-0.5">?</kbd> for shortcuts</span>
       </button>
-
-      {/* Floating AI Assistant Button - Only show when not on AI tab */}
-      {activeTab !== 'ai' && (
-        <button
-          onClick={() => setActiveTab('ai')}
-          className="fixed bottom-4 right-4 w-14 h-14 bg-gradient-to-br from-violet-500 to-purple-600 hover:from-violet-600 hover:to-purple-700 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all z-40 flex items-center justify-center group hover:scale-105 active:scale-95"
-          title="Open AI Assistant (Press 6)"
-        >
-          <span className="material-symbols-outlined text-[28px] group-hover:scale-110 transition-transform">smart_toy</span>
-          {/* Pulse indicator */}
-          <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse border-2 border-white dark:border-zinc-900"></span>
-        </button>
-      )}
 
       {/* Demo Banner */}
       {isDemo && (

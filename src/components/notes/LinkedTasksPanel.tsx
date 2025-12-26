@@ -26,6 +26,7 @@ const demoLinkedTasks: LinkedTask[] = [
     recurrence: null,
     notes: null,
     completed_date: null,
+    order_index: 0,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
     link_type: 'reference',

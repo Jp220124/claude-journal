@@ -73,6 +73,7 @@ export async function fetchCategoriesWithTodos(date: string): Promise<TaskCatego
     .select('*')
     .eq('user_id', user.id)
     .or(`due_date.eq.${date},due_date.is.null,and(due_date.lt.${date},completed.eq.false)`)
+    .order('order_index', { ascending: true })
 
   if (todoError) {
     console.error('Error fetching todos:', todoError)
@@ -280,11 +281,31 @@ export async function createTodo(todo: {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
+  // Get max order_index for this category to place new task at the end
+  let nextOrderIndex = 0
+  const categoryCondition = todo.category_id
+    ? `category_id.eq.${todo.category_id}`
+    : 'category_id.is.null'
+
+  const { data: maxOrderData } = await supabase
+    .from('todos')
+    .select('order_index')
+    .eq('user_id', user.id)
+    .or(categoryCondition)
+    .order('order_index', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (maxOrderData?.order_index !== undefined) {
+    nextOrderIndex = maxOrderData.order_index + 1
+  }
+
   const { data, error } = await supabase
     .from('todos')
     .insert({
       ...todo,
       user_id: user.id,
+      order_index: nextOrderIndex,
     })
     .select()
     .single()
@@ -426,6 +447,29 @@ export async function fetchTodosForRange(
   }
 
   return data || []
+}
+
+/**
+ * Reorder tasks within a category
+ * Uses the database RPC function for atomic reordering
+ */
+export async function reorderTasksInCategory(
+  categoryId: string | null,
+  taskIds: string[]
+): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase.rpc('reorder_tasks_in_category', {
+    p_category_id: categoryId === 'uncategorized' ? null : categoryId,
+    p_task_ids: taskIds
+  })
+
+  if (error) {
+    console.error('Error reordering tasks:', error)
+    return false
+  }
+
+  return true
 }
 
 /**

@@ -168,9 +168,17 @@ export default function DashboardPage() {
         </Link>
 
         {/* Words Written Stat */}
-        <div className="col-span-1 p-5 rounded-2xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex flex-col justify-between h-32 shadow-sm">
-          <span className="text-slate-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-wider">Words Written</span>
-          <div className="flex items-end gap-2">
+        <div className="col-span-1 p-5 rounded-2xl bg-gradient-to-br from-white to-slate-50 dark:from-zinc-800 dark:to-zinc-900 border border-slate-200 dark:border-zinc-700 flex flex-col justify-between h-32 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+          <div className="absolute right-[-20px] top-[-20px] opacity-5 group-hover:opacity-10 transition-opacity">
+            <span className="material-symbols-outlined text-cyan-600" style={{ fontSize: '80px' }}>edit_document</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-cyan-50 dark:bg-cyan-900/30 rounded-lg">
+              <span className="material-symbols-outlined text-cyan-600" style={{ fontSize: '16px' }}>stylus_note</span>
+            </div>
+            <span className="text-slate-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-wider">Words Written</span>
+          </div>
+          <div className="flex items-end gap-2 relative z-10">
             <span className="text-3xl font-bold text-slate-900 dark:text-white">{wordsWritten.toLocaleString()}</span>
             {wordsChange > 0 && (
               <span className="text-green-600 text-xs font-bold mb-1 flex items-center bg-green-50 dark:bg-green-900/30 px-1.5 py-0.5 rounded-md">
@@ -181,9 +189,17 @@ export default function DashboardPage() {
         </div>
 
         {/* Focus Time Stat */}
-        <div className="col-span-1 p-5 rounded-2xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex flex-col justify-between h-32 shadow-sm">
-          <span className="text-slate-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-wider">Focus Time</span>
-          <div className="flex items-end gap-2">
+        <div className="col-span-1 p-5 rounded-2xl bg-gradient-to-br from-white to-slate-50 dark:from-zinc-800 dark:to-zinc-900 border border-slate-200 dark:border-zinc-700 flex flex-col justify-between h-32 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+          <div className="absolute right-[-20px] top-[-20px] opacity-5 group-hover:opacity-10 transition-opacity">
+            <span className="material-symbols-outlined text-cyan-600" style={{ fontSize: '80px' }}>schedule</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-cyan-50 dark:bg-cyan-900/30 rounded-lg">
+              <span className="material-symbols-outlined text-cyan-600" style={{ fontSize: '16px' }}>timer</span>
+            </div>
+            <span className="text-slate-500 dark:text-zinc-400 text-xs font-bold uppercase tracking-wider">Focus Time</span>
+          </div>
+          <div className="flex items-end gap-2 relative z-10">
             <span className="text-3xl font-bold text-slate-900 dark:text-white">{focusTime}</span>
           </div>
         </div>
@@ -295,6 +311,7 @@ export default function DashboardPage() {
             </h2>
             <Link
               href="/today"
+              aria-label="Add new task"
               className="size-8 flex items-center justify-center rounded-lg bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-700 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>add</span>
