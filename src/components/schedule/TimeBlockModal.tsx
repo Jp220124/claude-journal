@@ -51,7 +51,7 @@ export function TimeBlockModal({
   const [blockType, setBlockType] = useState<TimeBlockType>('task')
   const [startTime, setStartTime] = useState('09:00')
   const [duration, setDuration] = useState(60)
-  const [color, setColor] = useState(BLOCK_COLORS.task)
+  const [color, setColor] = useState<string>(BLOCK_COLORS.task)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 

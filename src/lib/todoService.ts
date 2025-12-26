@@ -9,9 +9,11 @@ export interface Todo {
   due_date: string | null
   due_time: string | null
   category: string | null
+  category_id: string | null
   recurrence: string | null
   notes: string | null
   completed_date: string | null
+  order_index: number
   created_at: string
   updated_at: string
 }
@@ -23,9 +25,11 @@ export interface TodoInsert {
   due_date?: string | null
   due_time?: string | null
   category?: string | null
+  category_id?: string | null
   recurrence?: string | null
   notes?: string | null
   completed_date?: string | null
+  order_index?: number
 }
 
 export interface TodoUpdate {
@@ -35,9 +39,11 @@ export interface TodoUpdate {
   due_date?: string | null
   due_time?: string | null
   category?: string | null
+  category_id?: string | null
   recurrence?: string | null
   notes?: string | null
   completed_date?: string | null
+  order_index?: number
 }
 
 /**
