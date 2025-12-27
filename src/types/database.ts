@@ -365,6 +365,47 @@ export interface Database {
         }
       }
       // =====================================================
+      // Task Images
+      // =====================================================
+      task_images: {
+        Row: {
+          id: string
+          task_id: string
+          user_id: string
+          storage_path: string
+          file_name: string
+          file_size: number | null
+          mime_type: string | null
+          width: number | null
+          height: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          task_id: string
+          user_id: string
+          storage_path: string
+          file_name: string
+          file_size?: number | null
+          mime_type?: string | null
+          width?: number | null
+          height?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          task_id?: string
+          user_id?: string
+          storage_path?: string
+          file_name?: string
+          file_size?: number | null
+          mime_type?: string | null
+          width?: number | null
+          height?: number | null
+          created_at?: string
+        }
+      }
+      // =====================================================
       // Task Categories System
       // =====================================================
       task_categories: {

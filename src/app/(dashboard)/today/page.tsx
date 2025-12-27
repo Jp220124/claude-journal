@@ -8,6 +8,8 @@ import { useAuthStore } from '@/stores/authStore'
 import { isDemoAccount, demoTasksData } from '@/lib/demo'
 import { LinkedNotesPanel } from '@/components/notes'
 import { LinkedProjectsPanel } from '@/components/projects'
+import { TaskImageUpload, TaskImageIndicator, TaskImagePreviewModal } from '@/components/tasks'
+import { getTaskImages, type TaskImage } from '@/lib/tasks/taskImageUpload'
 import {
   DndContext,
   closestCenter,
@@ -89,10 +91,12 @@ interface SortableTaskItemProps {
   dueDateTimeText: string | null
   researchEnabled: boolean
   isResearching: string | null
+  taskImage?: TaskImage | null
   onSelect: () => void
   onToggleComplete: () => void
   onDelete: () => void
   onTriggerResearch: () => void
+  onImageClick?: () => void
 }
 
 // Sortable task item component
@@ -105,10 +109,12 @@ function SortableTaskItem({
   dueDateTimeText,
   researchEnabled,
   isResearching,
+  taskImage,
   onSelect,
   onToggleComplete,
   onDelete,
   onTriggerResearch,
+  onImageClick,
 }: SortableTaskItemProps) {
   const {
     attributes,
@@ -164,6 +170,15 @@ function SortableTaskItem({
           <span className="material-symbols-outlined text-[14px]">check</span>
         )}
       </button>
+
+      {/* Task Image Indicator */}
+      {taskImage && (
+        <TaskImageIndicator
+          image={taskImage}
+          size="sm"
+          onClick={onImageClick}
+        />
+      )}
 
       {/* Task Content */}
       <div className="flex-1 min-w-0">
@@ -285,6 +300,10 @@ export default function TodayPage() {
   const [isResearching, setIsResearching] = useState<string | null>(null)
   const [researchColdStart, setResearchColdStart] = useState(false)
 
+  // Task images state
+  const [taskImages, setTaskImages] = useState<Map<string, TaskImage>>(new Map())
+  const [previewImage, setPreviewImage] = useState<TaskImage | null>(null)
+
   const categoryModalRef = useRef<HTMLDivElement>(null)
   const starterCategoriesCreated = useRef(false)
 
@@ -380,6 +399,18 @@ export default function TodayPage() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  // Load task images when tasks change
+  useEffect(() => {
+    async function loadTaskImages() {
+      if (isDemo || allTasks.length === 0) return
+
+      const taskIds = allTasks.map(t => t.id)
+      const images = await getTaskImages(taskIds)
+      setTaskImages(images)
+    }
+    loadTaskImages()
+  }, [allTasks, isDemo])
 
   // Check if research is enabled and load category automations
   useEffect(() => {
@@ -1204,6 +1235,8 @@ export default function TodayPage() {
                               const isOverdue = !!(task.dueDate && task.dueDate < dateStr)
                               const dueDateTimeText = formatDueDateTime(task.dueDate, task.dueTime)
 
+                              const taskImage = taskImages.get(task.id)
+
                               return (
                                 <SortableTaskItem
                                   key={task.id}
@@ -1216,10 +1249,12 @@ export default function TodayPage() {
                                   dueDateTimeText={dueDateTimeText}
                                   researchEnabled={researchEnabled}
                                   isResearching={isResearching}
+                                  taskImage={taskImage}
                                   onSelect={() => setSelectedTask(task)}
                                   onToggleComplete={() => handleToggleComplete(task.id)}
                                   onDelete={() => handleDeleteTask(task.id)}
                                   onTriggerResearch={() => handleTriggerResearch(task)}
+                                  onImageClick={() => taskImage && setPreviewImage(taskImage)}
                                 />
                               )
                             })}
@@ -1395,6 +1430,24 @@ export default function TodayPage() {
                     onChange={(e) => handleUpdateTask(selectedTask.id, { notes: e.target.value })}
                   />
                 </div>
+
+                {/* Task Photo */}
+                <TaskImageUpload
+                  taskId={selectedTask.id}
+                  existingImage={taskImages.get(selectedTask.id)}
+                  onImageChange={(image) => {
+                    setTaskImages(prev => {
+                      const next = new Map(prev)
+                      if (image) {
+                        next.set(selectedTask.id, image)
+                      } else {
+                        next.delete(selectedTask.id)
+                      }
+                      return next
+                    })
+                  }}
+                  disabled={isDemo}
+                />
 
                 {/* Subtasks Preview */}
                 <div className="flex flex-col gap-2">
@@ -1619,6 +1672,15 @@ export default function TodayPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Task Image Preview Modal */}
+      {previewImage && (
+        <TaskImagePreviewModal
+          image={previewImage}
+          isOpen={!!previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
       )}
     </div>
   )
