@@ -27,6 +27,7 @@ import webhookRouter from './routes/webhook.js';
 import { handleStart, handleLink, handleHelp, handleTasks, handleToday, handleUnlink, handleNotes, handleNewNote, handleStats, handleInsights } from './handlers/commands.js';
 import { handleTextMessage } from './handlers/message.js';
 import { handleVoiceMessage } from './handlers/voice.js';
+import { handlePhotoMessage } from './handlers/photo.js';
 
 // Research automation imports (conditional)
 let startResearchWorker: (() => void) | undefined;
@@ -103,6 +104,9 @@ bot.on('message', async (msg) => {
 
 // Handle voice messages
 bot.on('voice', handleVoiceMessage);
+
+// Handle photo messages
+bot.on('photo', handlePhotoMessage);
 
 // Handle callback queries (inline keyboard buttons)
 bot.on('callback_query', async (query) => {
