@@ -9,7 +9,7 @@ import { BLOCK_COLORS, BLOCK_TYPE_ICONS } from '@/types/schedule'
 interface TimeBlockModalProps {
   isOpen: boolean
   onClose: () => void
-  onSave: (block: TimeBlockInsert) => Promise<void>
+  onSave: (block: TimeBlockInsert & { isRecurring?: boolean; reminderMinutes?: number }) => Promise<void>
   onDelete?: () => Promise<void>
   block?: TimeBlockWithTodo | null
   initialStartTime?: Date
@@ -34,6 +34,15 @@ const DURATION_OPTIONS = [
   { value: 180, label: '3 hours' },
 ]
 
+const REMINDER_OPTIONS = [
+  { value: 0, label: 'No reminder' },
+  { value: 5, label: '5 min before' },
+  { value: 10, label: '10 min before' },
+  { value: 15, label: '15 min before' },
+  { value: 30, label: '30 min before' },
+  { value: 60, label: '1 hour before' },
+]
+
 export function TimeBlockModal({
   isOpen,
   onClose,
@@ -52,6 +61,8 @@ export function TimeBlockModal({
   const [startTime, setStartTime] = useState('09:00')
   const [duration, setDuration] = useState(60)
   const [color, setColor] = useState<string>(BLOCK_COLORS.task)
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [reminderMinutes, setReminderMinutes] = useState(15)
   const [isSaving, setIsSaving] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -70,6 +81,8 @@ export function TimeBlockModal({
         setStartTime(format(start, 'HH:mm'))
         setDuration(durationMins)
         setColor(block.color || BLOCK_COLORS[block.block_type as TimeBlockType])
+        setIsRecurring(block.is_recurring || false)
+        setReminderMinutes((block as any).reminder_minutes_before || 15)
       } else if (initialStartTime) {
         // New block with initial time
         setTitle('')
@@ -78,6 +91,8 @@ export function TimeBlockModal({
         setStartTime(format(initialStartTime, 'HH:mm'))
         setDuration(60)
         setColor(BLOCK_COLORS.task)
+        setIsRecurring(false)
+        setReminderMinutes(15)
       } else {
         // New block, default to current hour
         const now = new Date()
@@ -87,6 +102,8 @@ export function TimeBlockModal({
         setStartTime(format(setMinutes(now, 0), 'HH:mm'))
         setDuration(60)
         setColor(BLOCK_COLORS.task)
+        setIsRecurring(false)
+        setReminderMinutes(15)
       }
     }
   }, [isOpen, block, initialStartTime])
@@ -112,6 +129,10 @@ export function TimeBlockModal({
         start_time: startDateTime.toISOString(),
         end_time: endDateTime.toISOString(),
         color,
+        is_recurring: isRecurring,
+        recurrence_pattern: isRecurring ? { frequency: 'daily', interval: 1 } : null,
+        isRecurring,
+        reminderMinutes: isRecurring ? reminderMinutes : undefined,
       })
       onClose()
     } catch (error) {
@@ -258,6 +279,69 @@ export function TimeBlockModal({
               className="w-full px-3 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none"
             />
           </div>
+
+          {/* Recurring Toggle */}
+          {!isEditing && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-cyan-600" style={{ fontSize: '20px' }}>
+                    repeat
+                  </span>
+                  <div>
+                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      Repeat Daily
+                    </div>
+                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Creates instances for the next 30 days
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRecurring(!isRecurring)}
+                  className={cn(
+                    'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2',
+                    isRecurring ? 'bg-cyan-600' : 'bg-zinc-300 dark:bg-zinc-600'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                      isRecurring ? 'translate-x-5' : 'translate-x-0'
+                    )}
+                  />
+                </button>
+              </div>
+
+              {/* Reminder dropdown - only shown when recurring is enabled */}
+              {isRecurring && (
+                <div className="ml-4 p-3 rounded-lg border border-cyan-200 dark:border-cyan-800 bg-cyan-50 dark:bg-cyan-900/20">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-outlined text-cyan-600" style={{ fontSize: '18px' }}>
+                      notifications
+                    </span>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                        Reminder
+                      </label>
+                      <select
+                        value={reminderMinutes}
+                        onChange={(e) => setReminderMinutes(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                      >
+                        {REMINDER_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Color preview */}
           <div className="flex items-center gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">

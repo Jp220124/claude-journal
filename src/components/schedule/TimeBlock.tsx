@@ -96,6 +96,18 @@ export function TimeBlock({
             )}
           </div>
 
+          {/* Recurring indicator */}
+          {block.is_recurring && (
+            <span
+              className="flex-shrink-0 text-cyan-600 dark:text-cyan-400"
+              title="Recurring daily"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>
+                repeat
+              </span>
+            </span>
+          )}
+
           {/* Duration badge for short blocks */}
           {isShort && (
             <span className="text-xs text-zinc-500 dark:text-zinc-400 flex-shrink-0">

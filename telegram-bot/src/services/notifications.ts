@@ -33,6 +33,9 @@ export async function processPendingNotifications(): Promise<{ sent: number; fai
         case 'due_reminder':
           message = formatDueReminder(notification.todo_title || 'Unknown task', notification.scheduled_for);
           break;
+        case 'time_block_reminder':
+          message = formatTimeBlockReminder(notification.message_content);
+          break;
         case 'daily_summary':
           message = notification.message_content || 'Here is your daily summary!';
           break;
@@ -74,6 +77,68 @@ function formatDueReminder(taskTitle: string, scheduledFor: string): string {
   });
 
   return `⏰ *Reminder*\n\nYour task is due soon:\n\n📋 *${taskTitle}*\n🕐 Due at ${timeString}\n\nReply "done ${taskTitle.split(' ')[0]}" to mark it complete!`;
+}
+
+/**
+ * Format a time block reminder message
+ */
+function formatTimeBlockReminder(messageContent: string | Record<string, unknown> | null): string {
+  // Parse the JSON content from the notification
+  let content: {
+    title?: string;
+    start_time?: string;
+    end_time?: string;
+    block_type?: string;
+    minutes_before?: number;
+  } = {};
+
+  if (typeof messageContent === 'string') {
+    try {
+      content = JSON.parse(messageContent);
+    } catch {
+      return `⏰ *Time Block Reminder*\n\n${messageContent}`;
+    }
+  } else if (messageContent && typeof messageContent === 'object') {
+    content = messageContent as typeof content;
+  }
+
+  const title = content.title || 'Time Block';
+  const startTime = content.start_time
+    ? new Date(content.start_time).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : 'soon';
+  const endTime = content.end_time
+    ? new Date(content.end_time).toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true,
+      })
+    : '';
+  const minutes = content.minutes_before || 15;
+
+  // Block type emojis
+  const blockEmojis: Record<string, string> = {
+    task: '📋',
+    focus: '🎯',
+    break: '☕',
+    meeting: '👥',
+    personal: '🏃',
+  };
+  const emoji = blockEmojis[content.block_type || 'task'] || '📅';
+
+  let message = `${emoji} *Time Block Starting in ${minutes} min!*\n\n`;
+  message += `📋 *${title}*\n`;
+  message += `⏰ ${startTime}`;
+  if (endTime) {
+    message += ` - ${endTime}`;
+  }
+  message += '\n\n';
+  message += `_Reply "done ${title.split(' ')[0]}" when complete, or "skip ${title.split(' ')[0]}" to skip._`;
+
+  return message;
 }
 
 /**

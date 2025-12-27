@@ -40,6 +40,12 @@ export interface TimeBlock {
   completed_at: string | null
   created_at: string
   updated_at: string
+  // Recurring block fields
+  parent_block_id?: string | null
+  is_template?: boolean
+  instance_date?: string | null
+  reminder_minutes_before?: number
+  reminder_sent?: boolean
 }
 
 export interface TimeBlockInsert {

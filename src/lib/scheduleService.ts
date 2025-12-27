@@ -196,6 +196,108 @@ export async function createBlockFromTodo(
   })
 }
 
+/**
+ * Create a recurring daily time block template and generate instances
+ * Uses Template + Instance model: creates a template and 30 days of instances
+ *
+ * Note: This uses only the columns that exist in the base time_blocks table
+ * to ensure compatibility even if the full recurring migration hasn't been applied.
+ */
+export async function createRecurringTimeBlock(
+  block: TimeBlockInsert & { reminderMinutes?: number }
+): Promise<{ success: boolean; template?: TimeBlock; instanceCount?: number; error?: string }> {
+  const supabase = createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return { success: false, error: 'No authenticated user' }
+  }
+
+  // Parse time from the start_time to get hours/minutes
+  const startDateTime = new Date(block.start_time)
+  const endDateTime = new Date(block.end_time)
+  const durationMs = endDateTime.getTime() - startDateTime.getTime()
+
+  const hours = startDateTime.getHours()
+  const minutes = startDateTime.getMinutes()
+
+  // Generate 30 days of instances (without template model for simpler compatibility)
+  // Each instance is a separate recurring block
+  const instances = []
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  for (let i = 0; i < 30; i++) {
+    const instanceDate = new Date(today)
+    instanceDate.setDate(instanceDate.getDate() + i)
+
+    const instanceStart = new Date(instanceDate)
+    instanceStart.setHours(hours, minutes, 0, 0)
+
+    const instanceEnd = new Date(instanceStart.getTime() + durationMs)
+
+    instances.push({
+      user_id: user.id,
+      title: block.title,
+      description: block.description ?? null,
+      start_time: instanceStart.toISOString(),
+      end_time: instanceEnd.toISOString(),
+      color: block.color ?? '#06b6d4',
+      is_recurring: true,
+      recurrence_pattern: { frequency: 'daily', interval: 1 },
+      block_type: block.block_type ?? 'task',
+      // Explicitly set to 0 to skip the reminder trigger until user_integrations table exists
+      reminder_minutes_before: 0,
+    })
+  }
+
+  const { data, error: instancesError } = await supabase
+    .from('time_blocks')
+    .insert(instances)
+    .select()
+
+  if (instancesError) {
+    console.error('Error creating recurring instances:', instancesError)
+    return { success: false, error: instancesError.message }
+  }
+
+  return {
+    success: true,
+    instanceCount: instances.length,
+  }
+}
+
+/**
+ * Delete a recurring time block template and all its instances
+ */
+export async function deleteRecurringTimeBlock(templateId: string): Promise<boolean> {
+  const supabase = createClient()
+
+  // Delete all instances first
+  const { error: instancesError } = await supabase
+    .from('time_blocks')
+    .delete()
+    .eq('parent_block_id', templateId)
+
+  if (instancesError) {
+    console.error('Error deleting recurring instances:', instancesError)
+    return false
+  }
+
+  // Delete the template
+  const { error: templateError } = await supabase
+    .from('time_blocks')
+    .delete()
+    .eq('id', templateId)
+
+  if (templateError) {
+    console.error('Error deleting recurring template:', templateError)
+    return false
+  }
+
+  return true
+}
+
 // =====================================================
 // Schedule Settings Operations
 // =====================================================

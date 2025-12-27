@@ -12,6 +12,7 @@ import {
   PendingNoteData,
   PendingTemplateData,
   PendingTaskPhotoData,
+  PendingTimeBlockData,
   DEFAULT_STATE,
 } from '../types/conversation.js';
 
@@ -54,7 +55,8 @@ export function setState(
   pendingJournal?: Partial<PendingJournalData>,
   pendingNote?: Partial<PendingNoteData>,
   pendingTemplate?: Partial<PendingTemplateData>,
-  pendingTaskPhoto?: Partial<PendingTaskPhotoData>
+  pendingTaskPhoto?: Partial<PendingTaskPhotoData>,
+  pendingTimeBlock?: Partial<PendingTimeBlockData>
 ): ConversationState {
   const currentState = getState(chatId);
   const now = Date.now();
@@ -81,6 +83,10 @@ export function setState(
       ...currentState.pendingTaskPhoto,
       ...pendingTaskPhoto,
     },
+    pendingTimeBlock: {
+      ...currentState.pendingTimeBlock,
+      ...pendingTimeBlock,
+    },
     lastUpdated: now,
     expiresAt: now + STATE_EXPIRATION_MS,
   };
@@ -93,6 +99,7 @@ export function setState(
     pendingNote: updatedState.pendingNote,
     pendingTemplate: updatedState.pendingTemplate,
     pendingTaskPhoto: updatedState.pendingTaskPhoto,
+    pendingTimeBlock: updatedState.pendingTimeBlock,
   });
 
   return updatedState;
@@ -144,6 +151,9 @@ export function getStateDescription(state: ConversationStateType): string {
     AWAITING_TEMPLATE_SELECTION: 'Waiting for template selection',
     AWAITING_TEMPLATE_SECTION: 'Waiting for template section content',
     AWAITING_TASK_PHOTO: 'Waiting for task photo',
+    AWAITING_TIME_BLOCK_TITLE: 'Waiting for time block title',
+    AWAITING_TIME_BLOCK_TIME: 'Waiting for time block time',
+    AWAITING_TIME_BLOCK_CONFIRM: 'Waiting for time block confirmation',
     CHATTING: 'In conversation',
   };
   return descriptions[state];
@@ -155,6 +165,14 @@ export function getStateDescription(state: ConversationStateType): string {
 export function updatePendingTemplate(chatId: string, data: Partial<PendingTemplateData>): void {
   const state = getState(chatId);
   setState(chatId, state.state, undefined, undefined, undefined, data);
+}
+
+/**
+ * Update pending time block data without changing state
+ */
+export function updatePendingTimeBlock(chatId: string, data: Partial<PendingTimeBlockData>): void {
+  const state = getState(chatId);
+  setState(chatId, state.state, undefined, undefined, undefined, undefined, undefined, data);
 }
 
 /**

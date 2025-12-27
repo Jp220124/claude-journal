@@ -392,6 +392,117 @@ function buildIntentTools(userCategories: string[]) {
       },
     },
   },
+  // Time Block / Schedule intents
+  {
+    type: 'function' as const,
+    function: {
+      name: 'create_time_block',
+      description: 'Create a scheduled time block. Use this when the user wants to schedule a focus block, block time for a task, create a daily recurring schedule, or set up a time block. Examples: "Schedule workout 6-7am daily", "Block 2-4pm for focus time every day", "Add meeting block tomorrow 3pm", "Create daily meditation 5am".',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'Title/name of the time block (e.g., "Workout", "Focus Time", "Team Meeting")',
+          },
+          start_time: {
+            type: 'string',
+            description: 'Start time in HH:MM format (24-hour). Parse times like "6am" to "06:00", "2pm" to "14:00", "9:30am" to "09:30".',
+          },
+          end_time: {
+            type: 'string',
+            description: 'End time in HH:MM format (24-hour). Parse times like "7am" to "07:00", "4pm" to "16:00". If duration is given (e.g., "for 1 hour"), calculate end_time from start_time.',
+          },
+          is_recurring: {
+            type: 'boolean',
+            description: 'Whether this block repeats daily. Set to true for words like "daily", "every day", "recurring", "repeat".',
+          },
+          block_type: {
+            type: 'string',
+            enum: ['task', 'focus', 'break', 'meeting', 'personal'],
+            description: 'Type of block: task (general work), focus (deep work/concentration), break (rest period), meeting (calls/meetings), personal (exercise, meditation, etc.)',
+          },
+          reminder_minutes: {
+            type: 'number',
+            description: 'Minutes before block to send reminder. Default 15. Parse: "remind me 30 min before" = 30, "5 minute reminder" = 5.',
+          },
+          date: {
+            type: 'string',
+            description: 'For one-time blocks, the date in YYYY-MM-DD format. Parse "today", "tomorrow". Leave empty for recurring blocks (start from today).',
+          },
+        },
+        required: ['title', 'start_time'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'show_schedule',
+      description: "View the user's schedule / time blocks. Use this when the user wants to see their schedule, check what's blocked, view time blocks, or see their daily agenda. Examples: \"Show my schedule\", \"What's on my calendar today\", \"My time blocks for tomorrow\".",
+      parameters: {
+        type: 'object',
+        properties: {
+          date: {
+            type: 'string',
+            enum: ['today', 'tomorrow', 'week'],
+            description: 'Which day to show schedule for. Defaults to today.',
+          },
+        },
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'complete_time_block',
+      description: 'Mark a time block as completed. Use this when the user says they finished a block, completed a session, or did their scheduled activity. Examples: "Done with workout", "Finished my focus block", "Completed meditation".',
+      parameters: {
+        type: 'object',
+        properties: {
+          block_identifier: {
+            type: 'string',
+            description: 'Block title or partial match to identify which time block to mark complete.',
+          },
+        },
+        required: ['block_identifier'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'skip_time_block',
+      description: 'Skip a recurring time block instance for today. Use this when the user wants to skip a scheduled block, cancel today\'s instance, or take a day off from a recurring block. Examples: "Skip workout today", "Cancel my focus block", "Skip meditation this morning".',
+      parameters: {
+        type: 'object',
+        properties: {
+          block_identifier: {
+            type: 'string',
+            description: 'Block title or partial match to identify which time block to skip.',
+          },
+        },
+        required: ['block_identifier'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'delete_time_block',
+      description: 'Delete a time block completely. For recurring blocks, this deletes the template and ALL future instances. Use when user wants to permanently remove a scheduled block. Examples: "Delete workout block", "Remove my focus time", "Cancel recurring meeting".',
+      parameters: {
+        type: 'object',
+        properties: {
+          block_identifier: {
+            type: 'string',
+            description: 'Block title or partial match to identify which time block to delete.',
+          },
+        },
+        required: ['block_identifier'],
+      },
+    },
+  },
   {
     type: 'function' as const,
     function: {
@@ -413,8 +524,8 @@ function buildIntentTools(userCategories: string[]) {
 }
 
 export interface ParsedIntent {
-  intent: 'add_todo' | 'add_multiple_todos' | 'add_journal' | 'query_todos' | 'mark_complete' | 'delete_todo' | 'edit_todo' | 'log_mood' | 'add_note' | 'query_notes' | 'read_note' | 'manage_note' | 'edit_note' | 'query_templates' | 'journal_template' | 'query_calendar' | 'query_recurring' | 'add_task_photo' | 'general_chat';
-  parameters: Record<string, string | string[] | undefined>;
+  intent: 'add_todo' | 'add_multiple_todos' | 'add_journal' | 'query_todos' | 'mark_complete' | 'delete_todo' | 'edit_todo' | 'log_mood' | 'add_note' | 'query_notes' | 'read_note' | 'manage_note' | 'edit_note' | 'query_templates' | 'journal_template' | 'query_calendar' | 'query_recurring' | 'add_task_photo' | 'create_time_block' | 'show_schedule' | 'complete_time_block' | 'skip_time_block' | 'delete_time_block' | 'general_chat';
+  parameters: Record<string, string | string[] | boolean | number | undefined>;
   confidence: 'high' | 'medium' | 'low';
   isComplete: boolean; // Whether all required data is present for execution
 }
@@ -726,6 +837,19 @@ Analyze the user's CURRENT message and call the most appropriate function.`;
       } else if (functionName === 'add_task_photo') {
         // Task photo is always complete - if no task specified, we'll show a list
         isComplete = true;
+      } else if (functionName === 'create_time_block') {
+        // Time block needs title and start_time at minimum
+        isComplete = !!args.title && (args.title as string).trim().length > 0 &&
+                     !!args.start_time && (args.start_time as string).trim().length > 0;
+      } else if (functionName === 'show_schedule') {
+        // Show schedule is always complete - can default to today
+        isComplete = true;
+      } else if (functionName === 'complete_time_block') {
+        isComplete = !!args.block_identifier && (args.block_identifier as string).trim().length > 0;
+      } else if (functionName === 'skip_time_block') {
+        isComplete = !!args.block_identifier && (args.block_identifier as string).trim().length > 0;
+      } else if (functionName === 'delete_time_block') {
+        isComplete = !!args.block_identifier && (args.block_identifier as string).trim().length > 0;
       }
       // query_todos, query_notes, and query_templates are always complete (can list without filters)
 

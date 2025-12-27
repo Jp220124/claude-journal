@@ -12,6 +12,9 @@ export type ConversationStateType =
   | 'AWAITING_TEMPLATE_SELECTION'
   | 'AWAITING_TEMPLATE_SECTION'
   | 'AWAITING_TASK_PHOTO'
+  | 'AWAITING_TIME_BLOCK_TITLE'
+  | 'AWAITING_TIME_BLOCK_TIME'
+  | 'AWAITING_TIME_BLOCK_CONFIRM'
   | 'CHATTING';
 
 export interface PendingTodoData {
@@ -56,6 +59,16 @@ export interface PendingTaskPhotoData {
   taskTitle?: string;
 }
 
+export interface PendingTimeBlockData {
+  title?: string;
+  startTime?: string; // HH:MM format
+  endTime?: string; // HH:MM format
+  isRecurring?: boolean;
+  blockType?: 'task' | 'focus' | 'break' | 'meeting' | 'personal';
+  reminderMinutes?: number;
+  date?: string; // YYYY-MM-DD for one-time blocks
+}
+
 export interface ConversationState {
   state: ConversationStateType;
   pendingTodo: PendingTodoData;
@@ -63,6 +76,7 @@ export interface ConversationState {
   pendingNote: PendingNoteData;
   pendingTemplate: PendingTemplateData;
   pendingTaskPhoto: PendingTaskPhotoData;
+  pendingTimeBlock: PendingTimeBlockData;
   lastUpdated: number; // timestamp
   expiresAt: number; // timestamp
 }
@@ -74,6 +88,7 @@ export const DEFAULT_STATE: ConversationState = {
   pendingNote: {},
   pendingTemplate: {},
   pendingTaskPhoto: {},
+  pendingTimeBlock: {},
   lastUpdated: Date.now(),
   expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
 };

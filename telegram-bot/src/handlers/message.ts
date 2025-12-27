@@ -48,6 +48,14 @@ import type { PendingTaskPhotoData } from '../types/conversation.js';
 import { config } from '../config/env.js';
 import { handleResearchTextInput, triggerResearchForTask } from './research.js';
 import { getCategoryAutomation } from '../services/researchDatabase.js';
+import {
+  handleCreateTimeBlock,
+  handleShowSchedule,
+  handleCompleteTimeBlock,
+  handleSkipTimeBlock,
+  handleDeleteTimeBlock,
+  handleTimeBlockConversation,
+} from './timeBlock.js';
 
 /**
  * Handle incoming text message with state machine
@@ -92,7 +100,7 @@ export async function handleTextMessage(msg: TelegramBot.Message): Promise<void>
 
   // Get current conversation state
   const conversationState = getState(chatId);
-  let response: string;
+  let response: string = '';
   let intentForHistory = 'state_continuation';
 
   try {
@@ -139,6 +147,27 @@ export async function handleTextMessage(msg: TelegramBot.Message): Promise<void>
         response = await handleAwaitingTaskPhotoSelection(chatId, integration.user_id, text);
         intentForHistory = 'add_task_photo';
         break;
+
+      case 'AWAITING_TIME_BLOCK_TITLE':
+      case 'AWAITING_TIME_BLOCK_TIME':
+      case 'AWAITING_TIME_BLOCK_CONFIRM': {
+        // User is in the time block creation flow
+        const handled = await handleTimeBlockConversation(chatId, integration.user_id, text);
+        if (handled) {
+          // Response already sent by handler, save to history and return
+          const processingTime = Date.now() - startTime;
+          await saveMessageHistory(integration.id, integration.user_id, 'inbound', 'text', text, {
+            aiIntent: 'create_time_block',
+            aiResponse: '[handled by time block flow]',
+            processingTimeMs: processingTime,
+          });
+          return;
+        }
+        // Fall through to IDLE if not handled
+        resetState(chatId);
+        response = "I didn't understand that. Let's start over - what would you like to do?";
+        break;
+      }
 
       case 'IDLE':
       default:
@@ -444,15 +473,15 @@ async function handleIncompleteIntent(chatId: string, intent: ParsedIntent): Pro
  * Execute parsed intent (when complete)
  */
 export async function executeIntent(chatId: string, userId: string, intent: ParsedIntent): Promise<string> {
-  // Cast parameters to the expected type for most functions
-  const params = intent.parameters as Record<string, string | undefined>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const params = intent.parameters as any;
 
   switch (intent.intent) {
     case 'add_todo':
       return executeAddTodo(chatId, userId, params);
 
     case 'add_multiple_todos':
-      return executeAddMultipleTodos(chatId, userId, intent.parameters);
+      return executeAddMultipleTodos(chatId, userId, params);
 
     case 'query_todos':
       return executeQueryTodos(chatId, userId, params);
@@ -501,6 +530,27 @@ export async function executeIntent(chatId: string, userId: string, intent: Pars
 
     case 'add_task_photo':
       return executeAddTaskPhoto(chatId, userId, params);
+
+    // Time block intents
+    case 'create_time_block':
+      await handleCreateTimeBlock(chatId, userId, intent.parameters);
+      return ''; // Response sent by handler
+
+    case 'show_schedule':
+      await handleShowSchedule(chatId, userId, intent.parameters);
+      return ''; // Response sent by handler
+
+    case 'complete_time_block':
+      await handleCompleteTimeBlock(chatId, userId, intent.parameters);
+      return ''; // Response sent by handler
+
+    case 'skip_time_block':
+      await handleSkipTimeBlock(chatId, userId, intent.parameters);
+      return ''; // Response sent by handler
+
+    case 'delete_time_block':
+      await handleDeleteTimeBlock(chatId, userId, intent.parameters);
+      return ''; // Response sent by handler
 
     case 'general_chat':
     default:

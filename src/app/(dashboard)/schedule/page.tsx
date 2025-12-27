@@ -11,6 +11,7 @@ import { TimeBlockModal } from '@/components/schedule/TimeBlockModal'
 import { UnscheduledTasks } from '@/components/schedule/UnscheduledTasks'
 import { PomodoroTimer, PomodoroFloatingWidget } from '@/components/schedule/PomodoroTimer'
 import { DailyPlanningRitual } from '@/components/schedule/DailyPlanningRitual'
+import { createRecurringTimeBlock } from '@/lib/scheduleService'
 import type { Todo } from '@/types/database'
 import type { TimeBlockWithTodo, TimeBlockInsert } from '@/types/schedule'
 
@@ -88,9 +89,20 @@ export default function SchedulePage() {
     await deleteBlock(blockId)
   }
 
-  const handleSaveBlock = async (blockData: TimeBlockInsert) => {
+  const handleSaveBlock = async (blockData: TimeBlockInsert & { isRecurring?: boolean; reminderMinutes?: number }) => {
     if (selectedBlock) {
       await updateBlock(selectedBlock.id, blockData)
+    } else if (blockData.isRecurring) {
+      // Create recurring time block with template + instances
+      const result = await createRecurringTimeBlock({
+        ...blockData,
+        reminderMinutes: blockData.reminderMinutes,
+      })
+      if (!result.success) {
+        console.error('Failed to create recurring block:', result.error)
+      }
+      // Refresh blocks after creating recurring block
+      window.location.reload()
     } else {
       await createBlock(blockData)
     }

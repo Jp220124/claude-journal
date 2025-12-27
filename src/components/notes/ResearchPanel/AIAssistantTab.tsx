@@ -41,12 +41,50 @@ export function AIAssistantTab({
     stop,
   } = useChat({
     id: noteId || 'default-chat',
-    messages: loadedMessages,
     transport: new DefaultChatTransport({
       api: '/api/ai/chat',
       body: {
         noteContent,
         noteId,
+      },
+      // Normalize messages before sending to ensure consistent format for convertToModelMessages
+      prepareSendMessagesRequest: ({ id, messages: msgs }) => {
+        // Ensure all messages have the proper UIMessage structure with parts array
+        const normalizedMessages = msgs.map(msg => {
+          // If message already has parts array in correct format, use it
+          if (msg.parts && Array.isArray(msg.parts) && msg.parts.length > 0) {
+            // Ensure each part has the correct structure
+            const normalizedParts = msg.parts.map(part => {
+              if (part.type === 'text') {
+                return { type: 'text' as const, text: part.text || '' }
+              }
+              // Preserve other part types as-is
+              return part
+            })
+            return {
+              id: msg.id,
+              role: msg.role,
+              parts: normalizedParts,
+            }
+          }
+          // Fallback: if message has content string (old format), convert to parts
+          const content = typeof (msg as unknown as { content?: string }).content === 'string'
+            ? (msg as unknown as { content: string }).content
+            : ''
+          return {
+            id: msg.id,
+            role: msg.role,
+            parts: [{ type: 'text' as const, text: content }],
+          }
+        })
+        return {
+          body: {
+            id,
+            messages: normalizedMessages,
+            noteContent,
+            noteId,
+          },
+        }
       },
     }),
     onError: (error) => {
@@ -110,16 +148,34 @@ export function AIAssistantTab({
         const response = await fetch(`/api/ai/chat-history?noteId=${noteId}`)
         if (response.ok) {
           const data = await response.json()
-          if (data.messages && data.messages.length > 0) {
-            // Convert stored messages to UIMessage format with parts
-            const loadedMsgs: UIMessage[] = data.messages.map((m: { id?: string; role: 'user' | 'assistant'; content: string }) => ({
-              id: m.id || crypto.randomUUID(),
-              role: m.role,
-              parts: [{ type: 'text' as const, text: m.content }],
-            }))
-            setLoadedMessages(loadedMsgs)
-            setMessages(loadedMsgs)
-            lastSavedMessagesRef.current = JSON.stringify(data.messages)
+          if (data.messages && Array.isArray(data.messages) && data.messages.length > 0) {
+            // Validate and convert stored messages to UIMessage format
+            const validMessages: UIMessage[] = []
+
+            for (const m of data.messages) {
+              // Skip invalid messages
+              if (!m || typeof m !== 'object') continue
+              if (!m.role || (m.role !== 'user' && m.role !== 'assistant')) continue
+              if (typeof m.content !== 'string') continue
+
+              validMessages.push({
+                id: (typeof m.id === 'string' && m.id) ? m.id : crypto.randomUUID(),
+                role: m.role as 'user' | 'assistant',
+                parts: [{ type: 'text' as const, text: m.content || '' }],
+              })
+            }
+
+            if (validMessages.length > 0) {
+              setLoadedMessages(validMessages)
+              setMessages(validMessages)
+              lastSavedMessagesRef.current = JSON.stringify(
+                validMessages.map(m => ({
+                  id: m.id,
+                  role: m.role,
+                  content: m.parts.map(p => p.type === 'text' ? p.text : '').join(''),
+                }))
+              )
+            }
           }
         }
       } catch (err) {
