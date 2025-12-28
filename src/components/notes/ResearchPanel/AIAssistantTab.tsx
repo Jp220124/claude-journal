@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useEffect, useState, useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import { useChat, type UIMessage } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -18,6 +19,7 @@ function getMessageText(message: UIMessage): string {
     .map(part => (part.type === 'text' ? part.text : ''))
     .join('')
 }
+
 
 export function AIAssistantTab({
   noteId,
@@ -47,36 +49,27 @@ export function AIAssistantTab({
         noteContent,
         noteId,
       },
-      // Normalize messages before sending to ensure consistent format for convertToModelMessages
+      // Normalize messages to ensure consistent format with simple text-only parts
       prepareSendMessagesRequest: ({ id, messages: msgs }) => {
-        // Ensure all messages have the proper UIMessage structure with parts array
         const normalizedMessages = msgs.map(msg => {
-          // If message already has parts array in correct format, use it
-          if (msg.parts && Array.isArray(msg.parts) && msg.parts.length > 0) {
-            // Ensure each part has the correct structure
-            const normalizedParts = msg.parts.map(part => {
-              if (part.type === 'text') {
-                return { type: 'text' as const, text: part.text || '' }
-              }
-              // Preserve other part types as-is
-              return part
-            })
-            return {
-              id: msg.id,
-              role: msg.role,
-              parts: normalizedParts,
-            }
+          // Extract text content from the message
+          let textContent = ''
+          if (msg.parts && Array.isArray(msg.parts)) {
+            textContent = msg.parts
+              .filter(p => p.type === 'text')
+              .map(p => (p as { type: 'text'; text: string }).text || '')
+              .join('')
+          } else if (typeof (msg as unknown as { content?: string }).content === 'string') {
+            textContent = (msg as unknown as { content: string }).content
           }
-          // Fallback: if message has content string (old format), convert to parts
-          const content = typeof (msg as unknown as { content?: string }).content === 'string'
-            ? (msg as unknown as { content: string }).content
-            : ''
+
           return {
             id: msg.id,
             role: msg.role,
-            parts: [{ type: 'text' as const, text: content }],
+            parts: [{ type: 'text' as const, text: textContent }],
           }
         })
+
         return {
           body: {
             id,
@@ -104,6 +97,7 @@ export function AIAssistantTab({
   })
 
   const isLoading = status === 'submitted' || status === 'streaming'
+
 
   // Save chat history to database
   const saveChatHistory = useCallback(async (msgs: UIMessage[]) => {
@@ -188,12 +182,34 @@ export function AIAssistantTab({
     loadChatHistory()
   }, [noteId, setMessages])
 
-  // Save messages when they change (after assistant finishes responding)
+  // Normalize and save messages when streaming completes
+  // This is critical: we must normalize assistant messages after streaming to ensure
+  // they pass the SDK's internal validation on subsequent requests
   useEffect(() => {
     if (status === 'ready' && messages.length > 0) {
-      saveChatHistory(messages)
+      // Check if any message needs normalization (has complex parts structure)
+      const needsNormalization = messages.some(msg => {
+        if (!msg.parts || msg.parts.length === 0) return true
+        // Check for non-text parts or complex structures
+        return msg.parts.some(p => p.type !== 'text') || msg.parts.length > 1
+      })
+
+      if (needsNormalization) {
+        // Create normalized messages with simple text-only parts
+        const normalizedMsgs: UIMessage[] = messages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          parts: [{ type: 'text' as const, text: getMessageText(msg) }],
+        }))
+
+        // Replace messages with normalized versions
+        setMessages(normalizedMsgs)
+        saveChatHistory(normalizedMsgs)
+      } else {
+        saveChatHistory(messages)
+      }
     }
-  }, [messages, status, saveChatHistory])
+  }, [status]) // Only depend on status to avoid infinite loops
 
   // Clear chat history
   const clearChat = async () => {
@@ -247,13 +263,31 @@ export function AIAssistantTab({
     setInput(prompt)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
 
-    sendMessage({ text: input })
+    const textToSend = input.trim()
     setInput('')
     setChatError(null)
+
+    // Normalize messages to simple text-only format before sending
+    // This strips streaming metadata (providerMetadata, state) from assistant messages
+    const normalizedMsgs: UIMessage[] = messages.map(msg => ({
+      id: msg.id,
+      role: msg.role,
+      parts: [{ type: 'text' as const, text: getMessageText(msg) }],
+    }))
+
+    // Use flushSync to force synchronous React state update
+    flushSync(() => {
+      setMessages(normalizedMsgs)
+    })
+
+    // Defer sendMessage to next tick to ensure state propagation
+    setTimeout(() => {
+      sendMessage({ text: textToSend })
+    }, 0)
   }
 
   const handleRetry = () => {
@@ -262,8 +296,23 @@ export function AIAssistantTab({
       const lastUserMessage = [...messages].reverse().find(m => m.role === 'user')
       if (lastUserMessage) {
         const text = getMessageText(lastUserMessage)
-        setMessages(messages.filter(m => m.id !== messages[messages.length - 1].id))
-        sendMessage({ text })
+        // Filter out the last message and normalize remaining messages
+        const filteredMessages = messages.filter(m => m.id !== messages[messages.length - 1].id)
+        const normalizedMsgs: UIMessage[] = filteredMessages.map(msg => ({
+          id: msg.id,
+          role: msg.role,
+          parts: [{ type: 'text' as const, text: getMessageText(msg) }],
+        }))
+
+        // Use flushSync to ensure state update, then defer sendMessage
+        flushSync(() => {
+          setMessages(normalizedMsgs)
+        })
+
+        // Defer to next event loop tick for state propagation
+        setTimeout(() => {
+          sendMessage({ text })
+        }, 0)
       }
     }
     setChatError(null)

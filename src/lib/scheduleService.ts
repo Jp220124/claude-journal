@@ -109,7 +109,8 @@ export async function createTimeBlock(block: TimeBlockInsert): Promise<TimeBlock
     .single()
 
   if (error) {
-    console.error('Error creating time block:', error)
+    console.error('Error creating time block:', JSON.stringify(error, null, 2))
+    console.error('Error details - code:', error.code, 'message:', error.message, 'details:', error.details, 'hint:', error.hint)
     return null
   }
 

@@ -38,6 +38,37 @@ export async function POST(request: Request) {
       })
     }
 
+    // Normalize messages to ensure proper UIMessage format for convertToModelMessages
+    // This handles messages coming from the client which may have varying structures
+    const normalizedMessages: UIMessage[] = messages.map((msg, index) => {
+      // Extract text content from various possible formats
+      let textContent = ''
+
+      // Handle parts array (AI SDK v6 UIMessage format)
+      if (msg.parts && Array.isArray(msg.parts)) {
+        textContent = msg.parts
+          .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+          .map(part => part.text || '')
+          .join('')
+      }
+      // Handle legacy content string format
+      else if (typeof (msg as unknown as { content?: string }).content === 'string') {
+        textContent = (msg as unknown as { content: string }).content
+      }
+
+      // Ensure role is valid
+      const role = msg.role === 'user' || msg.role === 'assistant' || msg.role === 'system'
+        ? msg.role
+        : 'user'
+
+      // Create properly structured UIMessage
+      return {
+        id: msg.id || `msg-${index}-${Date.now()}`,
+        role,
+        parts: [{ type: 'text' as const, text: textContent }],
+      }
+    })
+
     // Determine provider and authentication method
     let provider: AIProviderType = requestedProvider || 'openrouter'
     let apiKey: string | null = null
@@ -120,7 +151,7 @@ export async function POST(request: Request) {
     }
 
     // Convert UIMessages to model messages
-    const modelMessages = await convertToModelMessages(messages)
+    const modelMessages = await convertToModelMessages(normalizedMessages)
 
     // Stream the response
     const result = streamText({

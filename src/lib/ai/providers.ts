@@ -66,11 +66,13 @@ export function createAIProvider(config: AIProviderConfig) {
       return anthropic(selectedModel)
 
     case 'openai':
+      // Use .chat() to explicitly use Chat Completions API (not Responses API)
       const openai = createOpenAI({ apiKey })
-      return openai(selectedModel)
+      return openai.chat(selectedModel)
 
     case 'openrouter':
-      // OpenRouter uses OpenAI-compatible API with custom base URL
+      // OpenRouter uses OpenAI-compatible Chat Completions API with custom base URL
+      // IMPORTANT: Use .chat() to use Chat Completions format, not Responses API
       const openrouter = createOpenAI({
         apiKey,
         baseURL: 'https://openrouter.ai/api/v1',
@@ -79,7 +81,7 @@ export function createAIProvider(config: AIProviderConfig) {
           'X-Title': 'Journal App',
         },
       })
-      return openrouter(selectedModel)
+      return openrouter.chat(selectedModel)
 
     default:
       throw new Error(`Unknown provider: ${provider}`)
