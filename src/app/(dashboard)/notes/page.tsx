@@ -33,6 +33,9 @@ import {
   addTagToNote,
   removeTagFromNote,
   getNoteTags,
+  lockNote,
+  unlockNote,
+  removeLockFromNote,
 } from '@/lib/notesService'
 import { uploadNoteImage } from '@/lib/notes/imageUpload'
 import {
@@ -53,6 +56,9 @@ import type { NotesEditorHandle } from '@/components/notes/NotesEditor'
 import { ResearchPanel } from '@/components/notes/ResearchPanel'
 import { NoteFolderTree } from '@/components/notes/NoteFolderTree'
 import { ShareNoteDialog } from '@/components/notes/ShareNoteDialog'
+import { LockNoteModal } from '@/components/notes/LockNoteModal'
+import { UnlockNoteModal } from '@/components/notes/UnlockNoteModal'
+import { LockedNotesProvider, useLockedNotes } from '@/contexts/LockedNotesContext'
 import { LinkedProjectsPanelForNotes } from '@/components/projects'
 import { getFileDownloadUrl } from '@/lib/projectService'
 import { markdownToTiptap, markdownToPlainText } from '@/lib/markdownToTiptap'
@@ -259,6 +265,11 @@ function NotesPageContent() {
 
   // Share dialog state
   const [showShareDialog, setShowShareDialog] = useState(false)
+
+  // Lock dialog state
+  const [showLockModal, setShowLockModal] = useState(false)
+  const [showUnlockModal, setShowUnlockModal] = useState(false)
+  const [noteToUnlock, setNoteToUnlock] = useState<Note | null>(null)
 
   // Research Panel state
   const [isResearchPanelOpen, setIsResearchPanelOpen] = useState(false)
@@ -625,8 +636,14 @@ function NotesPageContent() {
   }, [selectedNote?.id])
 
   // Stable callback for selecting notes - prevents re-renders of memoized components
+  // This now checks if note is locked and shows unlock modal if needed
   const handleSelectNote = useCallback((note: Note) => {
-    setSelectedNote(note)
+    if (note.is_locked) {
+      setNoteToUnlock(note)
+      setShowUnlockModal(true)
+    } else {
+      setSelectedNote(note)
+    }
   }, [])
 
   // Create new note
@@ -795,6 +812,64 @@ function NotesPageContent() {
     } catch (error) {
       console.error('Error toggling archive:', error)
       loadData()
+    }
+  }
+
+  // Lock note
+  const handleLockNote = async (password: string) => {
+    if (!selectedNote) return
+
+    try {
+      const updatedNote = await lockNote(selectedNote.id, password)
+      // Update the note in state
+      setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, is_locked: true } : n))
+      setAllRecentNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, is_locked: true } : n))
+      setSelectedNote(prev => prev ? { ...prev, is_locked: true } : null)
+    } catch (error) {
+      console.error('Error locking note:', error)
+      throw error
+    }
+  }
+
+  // Unlock note
+  const handleUnlockNote = async (password: string) => {
+    if (!noteToUnlock) return
+
+    try {
+      const unlockedNoteData = await unlockNote(noteToUnlock.id, password)
+      // Update the note content with the unlocked data
+      setNotes(prev => prev.map(n => n.id === noteToUnlock.id ? unlockedNoteData : n))
+      setAllRecentNotes(prev => prev.map(n => n.id === noteToUnlock.id ? unlockedNoteData : n))
+      setSelectedNote(unlockedNoteData)
+      setNoteToUnlock(null)
+    } catch (error) {
+      console.error('Error unlocking note:', error)
+      throw error
+    }
+  }
+
+  // Remove lock from note
+  const handleRemoveLock = async () => {
+    if (!selectedNote || !selectedNote.is_locked) return
+
+    try {
+      await removeLockFromNote(selectedNote.id)
+      // Update the note in state
+      setNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, is_locked: false } : n))
+      setAllRecentNotes(prev => prev.map(n => n.id === selectedNote.id ? { ...n, is_locked: false } : n))
+      setSelectedNote(prev => prev ? { ...prev, is_locked: false } : null)
+    } catch (error) {
+      console.error('Error removing lock:', error)
+    }
+  }
+
+  // Handle clicking on a locked note
+  const handleLockedNoteClick = (note: Note) => {
+    if (note.is_locked) {
+      setNoteToUnlock(note)
+      setShowUnlockModal(true)
+    } else {
+      setSelectedNote(note)
     }
   }
 
@@ -1268,6 +1343,34 @@ function NotesPageContent() {
                 </button>
               )}
 
+              {/* Lock/Unlock Button */}
+              {!isDemo && (
+                <button
+                  onClick={() => {
+                    if (selectedNote.is_locked) {
+                      // Show confirmation to remove lock
+                      if (confirm('Remove password protection from this note?')) {
+                        handleRemoveLock()
+                      }
+                    } else {
+                      setShowLockModal(true)
+                    }
+                  }}
+                  className={cn(
+                    'p-2 rounded-lg transition-colors',
+                    selectedNote.is_locked
+                      ? 'text-amber-500 bg-amber-50 dark:bg-amber-900/30'
+                      : 'text-zinc-400 dark:text-zinc-500 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/30'
+                  )}
+                  aria-label={selectedNote.is_locked ? 'Remove lock' : 'Lock note'}
+                  title={selectedNote.is_locked ? 'Click to remove password protection' : 'Add password protection'}
+                >
+                  <span className="material-symbols-outlined text-[20px]">
+                    {selectedNote.is_locked ? 'lock' : 'lock_open'}
+                  </span>
+                </button>
+              )}
+
               {/* Research Panel Toggle */}
               <button
                 onClick={() => setIsResearchPanelOpen(!isResearchPanelOpen)}
@@ -1502,14 +1605,23 @@ function NotesPageContent() {
                 {sortedNotes.map((note) => (
                   <button
                     key={note.id}
-                    onClick={() => setSelectedNote(note)}
+                    onClick={() => note.is_locked ? handleLockedNoteClick(note) : setSelectedNote(note)}
                     className={cn(
-                      'text-left p-4 border rounded-xl hover:shadow-md transition-all group',
+                      'text-left p-4 border rounded-xl hover:shadow-md transition-all group relative',
                       note.source_type === 'research'
                         ? 'bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/20 dark:to-blue-900/20 border-cyan-200 dark:border-cyan-700 hover:border-cyan-400 dark:hover:border-cyan-500'
                         : 'bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-cyan-300 dark:hover:border-cyan-600'
                     )}
                   >
+                    {/* Lock indicator overlay */}
+                    {note.is_locked && (
+                      <div className="absolute top-2 right-2">
+                        <span className="inline-flex items-center justify-center w-6 h-6 bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-400 rounded-full">
+                          <span className="material-symbols-outlined text-[14px]">lock</span>
+                        </span>
+                      </div>
+                    )}
+
                     {/* Badges */}
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       {note.is_pinned && (
@@ -1528,12 +1640,13 @@ function NotesPageContent() {
 
                     {/* Title */}
                     <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 mb-2 line-clamp-2 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
+                      {note.is_locked && <span className="material-symbols-outlined text-[16px] mr-1 align-text-bottom text-amber-500">lock</span>}
                       {note.title || 'Untitled Note'}
                     </h3>
 
                     {/* Preview */}
                     <p className="text-sm text-zinc-500 dark:text-zinc-400 line-clamp-3 mb-3">
-                      {note.content_text || 'No content'}
+                      {note.is_locked ? 'This note is password protected. Click to unlock.' : (note.content_text || 'No content')}
                     </p>
 
                     {/* Footer */}
@@ -1692,6 +1805,25 @@ function NotesPageContent() {
         note={selectedNote}
         isOpen={showShareDialog}
         onClose={() => setShowShareDialog(false)}
+      />
+
+      {/* Lock Note Modal */}
+      <LockNoteModal
+        isOpen={showLockModal}
+        onClose={() => setShowLockModal(false)}
+        onLock={handleLockNote}
+        noteTitle={selectedNote?.title}
+      />
+
+      {/* Unlock Note Modal */}
+      <UnlockNoteModal
+        isOpen={showUnlockModal}
+        onClose={() => {
+          setShowUnlockModal(false)
+          setNoteToUnlock(null)
+        }}
+        onUnlock={handleUnlockNote}
+        noteTitle={noteToUnlock?.title}
       />
 
       {/* Research Panel (AI Chat & Web Search) */}

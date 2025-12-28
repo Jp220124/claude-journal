@@ -716,6 +716,10 @@ export interface Note {
   research_job_id?: string | null
   source_type?: 'manual' | 'research' | 'import' | null
   sources?: ResearchSource[] | null
+  // Password protection fields
+  is_locked?: boolean
+  password_hash?: string | null
+  locked_at?: string | null
 }
 
 export interface NoteTag {
@@ -794,6 +798,10 @@ export interface NoteUpdate {
   is_pinned?: boolean
   is_archived?: boolean
   word_count?: number
+  // Password protection fields
+  is_locked?: boolean
+  password_hash?: string | null
+  locked_at?: string | null
 }
 
 export interface NoteTagUpdate {

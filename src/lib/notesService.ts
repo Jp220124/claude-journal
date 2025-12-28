@@ -1045,3 +1045,81 @@ export async function updateNoteShare(
 
   return data
 }
+
+// =====================================================
+// Note Password Protection Operations
+// =====================================================
+
+/**
+ * Lock a note with a password
+ * @param noteId - The note to lock
+ * @param password - The password to set
+ * @returns The updated note (without password_hash) or throws error
+ */
+export async function lockNote(noteId: string, password: string): Promise<Note> {
+  const response = await fetch(`/api/notes/${noteId}/lock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to lock note')
+  }
+
+  return data.note
+}
+
+/**
+ * Unlock a note by verifying the password
+ * @param noteId - The note to unlock
+ * @param password - The password to verify
+ * @returns The full note content or throws error
+ */
+export async function unlockNote(noteId: string, password: string): Promise<Note> {
+  const response = await fetch(`/api/notes/${noteId}/unlock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Incorrect password')
+  }
+
+  return data.note
+}
+
+/**
+ * Remove password protection from a note
+ * @param noteId - The note to remove lock from
+ * @returns The updated note or throws error
+ */
+export async function removeLockFromNote(noteId: string): Promise<Note> {
+  const response = await fetch(`/api/notes/${noteId}/remove-lock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    throw new Error(data.error || 'Failed to remove lock')
+  }
+
+  return data.note
+}
+
+/**
+ * Check if a note is locked
+ * @param noteId - The note to check
+ * @returns true if locked, false otherwise
+ */
+export async function isNoteLocked(noteId: string): Promise<boolean> {
+  const note = await fetchNoteById(noteId)
+  return note?.is_locked === true
+}
