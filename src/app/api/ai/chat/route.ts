@@ -120,7 +120,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // Only check database if user explicitly requested a specific provider
+    // Only check database if user explicitly requested a specific provider (not google/openrouter which use env keys)
     if (requestedProvider && requestedProvider !== 'google' && requestedProvider !== 'openrouter') {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data: apiKeyData } = await (supabase as any)
@@ -141,14 +141,14 @@ export async function POST(request: Request) {
           console.log(`Using user-configured ${provider} provider`)
         }
       }
+    }
 
-      // Try Google OAuth token if provider is Google and no API key yet
-      if (requestedProvider === 'google' && !apiKey) {
-        const tokenResult = await getValidAccessToken(supabase, user.id, 'google')
-        if (tokenResult) {
-          oauthToken = tokenResult.accessToken
-          console.log('Using Google OAuth token')
-        }
+    // Try Google OAuth token if provider is Google and no API key yet
+    if (provider === 'google' && !apiKey) {
+      const tokenResult = await getValidAccessToken(supabase, user.id, 'google')
+      if (tokenResult) {
+        oauthToken = tokenResult.accessToken
+        console.log('Using Google OAuth token')
       }
     }
 
