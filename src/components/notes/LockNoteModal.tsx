@@ -126,8 +126,9 @@ export function LockNoteModal({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter password"
-                className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+                className="w-full px-4 py-3 pr-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
                 disabled={isLoading}
+                autoComplete="off"
               />
               <button
                 type="button"
@@ -150,8 +151,9 @@ export function LockNoteModal({
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               placeholder="Confirm password"
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none"
+              className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent outline-none [&::-ms-reveal]:hidden [&::-ms-clear]:hidden"
               disabled={isLoading}
+              autoComplete="off"
             />
           </div>
 

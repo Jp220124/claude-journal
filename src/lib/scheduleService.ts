@@ -126,18 +126,39 @@ export async function updateTimeBlock(
 ): Promise<TimeBlock | null> {
   const supabase = createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    console.error('No authenticated user for time block update')
+    return null
+  }
+
+  // Filter out any undefined values and ensure we only send valid fields
+  const cleanUpdates: Record<string, unknown> = {}
+  const allowedFields = [
+    'title', 'description', 'start_time', 'end_time', 'color',
+    'is_recurring', 'recurrence_pattern', 'buffer_minutes',
+    'block_type', 'energy_level', 'completed_at', 'todo_id'
+  ]
+
+  for (const key of allowedFields) {
+    if (key in updates && updates[key as keyof TimeBlockUpdate] !== undefined) {
+      cleanUpdates[key] = updates[key as keyof TimeBlockUpdate]
+    }
+  }
+
+  cleanUpdates.updated_at = new Date().toISOString()
+
   const { data, error } = await supabase
     .from('time_blocks')
-    .update({
-      ...updates,
-      updated_at: new Date().toISOString(),
-    })
+    .update(cleanUpdates)
     .eq('id', id)
+    .eq('user_id', user.id)  // Ensure user owns this block
     .select()
     .single()
 
   if (error) {
-    console.error('Error updating time block:', error)
+    console.error('Error updating time block:', JSON.stringify(error, null, 2))
+    console.error('Error details - code:', error.code, 'message:', error.message, 'details:', error.details, 'hint:', error.hint)
     return null
   }
 
