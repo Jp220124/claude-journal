@@ -12,18 +12,26 @@ export interface AIProviderConfig {
 
 // Default models for each provider
 export const defaultModels: Record<AIProviderType, string> = {
-  google: 'gemini-1.5-flash',
+  google: 'gemini-2.0-flash-exp',
   anthropic: 'claude-3-5-sonnet-20241022',
   openai: 'gpt-4o-mini',
   openrouter: 'meta-llama/llama-3.3-70b-instruct:free',
 }
 
+// Vision-capable models for each provider (used when images are present)
+export const visionModels: Record<AIProviderType, string> = {
+  google: 'gemini-2.0-flash-exp', // Gemini 2.0 supports vision natively
+  anthropic: 'claude-3-5-sonnet-20241022', // Claude 3+ supports vision
+  openai: 'gpt-4o', // GPT-4o supports vision
+  openrouter: 'google/gemini-2.0-flash-exp:free', // Free vision-capable model
+}
+
 // Available models for each provider
 export const availableModels: Record<AIProviderType, { id: string; name: string }[]> = {
   google: [
-    { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Experimental)' },
+    { id: 'gemini-2.0-flash-exp', name: 'Gemini 2.0 Flash (Default)' },
+    { id: 'gemini-1.5-pro-latest', name: 'Gemini 1.5 Pro' },
+    { id: 'gemini-1.5-flash-latest', name: 'Gemini 1.5 Flash' },
   ],
   anthropic: [
     { id: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },

@@ -4,7 +4,6 @@ import { useRef, useEffect, useState, useCallback } from 'react'
 import { flushSync } from 'react-dom'
 import { useChat, type UIMessage } from '@ai-sdk/react'
 import { DefaultChatTransport } from 'ai'
-import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 interface AIAssistantTabProps {
@@ -13,6 +12,11 @@ interface AIAssistantTabProps {
   onInsertToNote?: (content: string) => void
 }
 
+// Allowed image types
+const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILES = 4
+
 // Helper to get text content from message parts
 function getMessageText(message: UIMessage): string {
   return message.parts
@@ -20,6 +24,51 @@ function getMessageText(message: UIMessage): string {
     .join('')
 }
 
+// Helper to get image parts from message
+function getMessageImages(message: UIMessage): Array<{ url: string; filename?: string }> {
+  const images: Array<{ url: string; filename?: string }> = []
+  for (const part of message.parts) {
+    if (part.type === 'file' && part.mediaType?.startsWith('image/')) {
+      images.push({ url: part.url, filename: part.filename })
+    }
+  }
+  return images
+}
+
+// Image preview component
+function ImagePreview({
+  files,
+  onRemove
+}: {
+  files: File[]
+  onRemove: (index: number) => void
+}) {
+  if (files.length === 0) return null
+
+  return (
+    <div className="flex gap-2 p-2 overflow-x-auto">
+      {files.map((file, index) => (
+        <div key={`${file.name}-${index}`} className="relative flex-shrink-0 group">
+          <img
+            src={URL.createObjectURL(file)}
+            alt={file.name}
+            className="h-16 w-16 object-cover rounded-lg border border-zinc-200 dark:border-zinc-700"
+          />
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <span className="material-symbols-outlined text-[12px]">close</span>
+          </button>
+          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[8px] px-1 py-0.5 rounded-b-lg truncate">
+            {(file.size / 1024).toFixed(0)}KB
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export function AIAssistantTab({
   noteId,
@@ -32,8 +81,11 @@ export function AIAssistantTab({
   const [loadedMessages, setLoadedMessages] = useState<UIMessage[]>([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [chatError, setChatError] = useState<string | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [fileError, setFileError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const lastSavedMessagesRef = useRef<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const {
     messages,
@@ -49,24 +101,50 @@ export function AIAssistantTab({
         noteContent,
         noteId,
       },
-      // Normalize messages to ensure consistent format with simple text-only parts
+      // Normalize messages but preserve file parts for images
       prepareSendMessagesRequest: ({ id, messages: msgs }) => {
         const normalizedMessages = msgs.map(msg => {
           // Extract text content from the message
           let textContent = ''
+          const fileParts: Array<{ type: 'file'; url: string; mediaType: string; filename?: string }> = []
+
           if (msg.parts && Array.isArray(msg.parts)) {
-            textContent = msg.parts
-              .filter(p => p.type === 'text')
-              .map(p => (p as { type: 'text'; text: string }).text || '')
-              .join('')
+            for (const part of msg.parts) {
+              if (part.type === 'text') {
+                textContent += (part as { type: 'text'; text: string }).text || ''
+              } else if (part.type === 'file') {
+                // Preserve file parts (images)
+                const filePart = part as { type: 'file'; url: string; mediaType?: string; filename?: string }
+                if (filePart.mediaType?.startsWith('image/')) {
+                  fileParts.push({
+                    type: 'file',
+                    url: filePart.url,
+                    mediaType: filePart.mediaType,
+                    filename: filePart.filename,
+                  })
+                }
+              }
+            }
           } else if (typeof (msg as unknown as { content?: string }).content === 'string') {
             textContent = (msg as unknown as { content: string }).content
+          }
+
+          // Build parts array with text first, then files
+          const parts: Array<{ type: 'text'; text: string } | { type: 'file'; url: string; mediaType: string; filename?: string }> = []
+          if (textContent) {
+            parts.push({ type: 'text' as const, text: textContent })
+          }
+          parts.push(...fileParts)
+
+          // If no parts, add empty text part
+          if (parts.length === 0) {
+            parts.push({ type: 'text' as const, text: '' })
           }
 
           return {
             id: msg.id,
             role: msg.role,
-            parts: [{ type: 'text' as const, text: textContent }],
+            parts,
           }
         })
 
@@ -98,12 +176,66 @@ export function AIAssistantTab({
 
   const isLoading = status === 'submitted' || status === 'streaming'
 
+  // Handle file selection
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+
+    setFileError(null)
+    const newFiles: File[] = []
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+
+      // Validate file type
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        setFileError(`${file.name}: Unsupported format. Use JPEG, PNG, GIF, or WebP.`)
+        continue
+      }
+
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        setFileError(`${file.name}: File too large. Max size is 10MB.`)
+        continue
+      }
+
+      newFiles.push(file)
+    }
+
+    // Check max files limit
+    const totalFiles = selectedFiles.length + newFiles.length
+    if (totalFiles > MAX_FILES) {
+      setFileError(`Maximum ${MAX_FILES} images allowed per message.`)
+      const allowedCount = MAX_FILES - selectedFiles.length
+      setSelectedFiles(prev => [...prev, ...newFiles.slice(0, allowedCount)])
+    } else {
+      setSelectedFiles(prev => [...prev, ...newFiles])
+    }
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  // Remove file from selection
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
+    setFileError(null)
+  }
+
+  // Convert File to FileList-like object for AI SDK
+  const createFileList = (files: File[]): FileList => {
+    const dataTransfer = new DataTransfer()
+    files.forEach(file => dataTransfer.items.add(file))
+    return dataTransfer.files
+  }
 
   // Save chat history to database
   const saveChatHistory = useCallback(async (msgs: UIMessage[]) => {
     if (!noteId || msgs.length === 0) return
 
-    // Convert messages to a serializable format
+    // Convert messages to a serializable format (text only for storage)
     const serializableMessages = msgs.map(m => ({
       id: m.id,
       role: m.role,
@@ -183,24 +315,32 @@ export function AIAssistantTab({
   }, [noteId, setMessages])
 
   // Normalize and save messages when streaming completes
-  // This is critical: we must normalize assistant messages after streaming to ensure
-  // they pass the SDK's internal validation on subsequent requests
   useEffect(() => {
     if (status === 'ready' && messages.length > 0) {
       // Check if any message needs normalization (has complex parts structure)
       const needsNormalization = messages.some(msg => {
         if (!msg.parts || msg.parts.length === 0) return true
-        // Check for non-text parts or complex structures
-        return msg.parts.some(p => p.type !== 'text') || msg.parts.length > 1
+        // Check for parts that aren't text or file
+        return msg.parts.some(p => p.type !== 'text' && p.type !== 'file')
       })
 
       if (needsNormalization) {
-        // Create normalized messages with simple text-only parts
-        const normalizedMsgs: UIMessage[] = messages.map(msg => ({
-          id: msg.id,
-          role: msg.role,
-          parts: [{ type: 'text' as const, text: getMessageText(msg) }],
-        }))
+        // Create normalized messages preserving text and file parts
+        const normalizedMsgs: UIMessage[] = messages.map(msg => {
+          const textContent = getMessageText(msg)
+          const imageParts = msg.parts.filter(p =>
+            p.type === 'file' && (p as { mediaType?: string }).mediaType?.startsWith('image/')
+          )
+
+          return {
+            id: msg.id,
+            role: msg.role,
+            parts: [
+              { type: 'text' as const, text: textContent },
+              ...imageParts,
+            ],
+          }
+        })
 
         // Replace messages with normalized versions
         setMessages(normalizedMsgs)
@@ -225,6 +365,7 @@ export function AIAssistantTab({
         body: JSON.stringify({ noteId }),
       })
       setMessages([])
+      setSelectedFiles([])
       lastSavedMessagesRef.current = ''
     } catch (err) {
       console.error('Failed to clear chat history:', err)
@@ -265,14 +406,17 @@ export function AIAssistantTab({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!input.trim() || isLoading) return
+    if ((!input.trim() && selectedFiles.length === 0) || isLoading) return
 
     const textToSend = input.trim()
-    setInput('')
-    setChatError(null)
+    const filesToSend = selectedFiles.length > 0 ? createFileList(selectedFiles) : undefined
 
-    // Normalize messages to simple text-only format before sending
-    // This strips streaming metadata (providerMetadata, state) from assistant messages
+    setInput('')
+    setSelectedFiles([])
+    setChatError(null)
+    setFileError(null)
+
+    // Normalize messages to simple format before sending
     const normalizedMsgs: UIMessage[] = messages.map(msg => ({
       id: msg.id,
       role: msg.role,
@@ -286,7 +430,11 @@ export function AIAssistantTab({
 
     // Defer sendMessage to next tick to ensure state propagation
     setTimeout(() => {
-      sendMessage({ text: textToSend })
+      if (filesToSend) {
+        sendMessage({ text: textToSend || 'What is in this image?', files: filesToSend })
+      } else {
+        sendMessage({ text: textToSend })
+      }
     }, 0)
   }
 
@@ -404,7 +552,7 @@ export function AIAssistantTab({
               AI Research Assistant
             </h3>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-[280px]">
-              Ask questions, get summaries, or brainstorm ideas. Your AI assistant is ready to help with your notes.
+              Ask questions, get summaries, or upload images for analysis. Your AI assistant is ready to help.
             </p>
 
             {/* Quick Actions */}
@@ -433,6 +581,8 @@ export function AIAssistantTab({
           <>
             {messages.map((message) => {
               const messageText = getMessageText(message)
+              const messageImages = getMessageImages(message)
+
               return (
                 <div
                   key={message.id}
@@ -457,9 +607,25 @@ export function AIAssistantTab({
                         : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200'
                     )}
                   >
-                    <div className="text-sm whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
-                      {messageText}
-                    </div>
+                    {/* Display images if present */}
+                    {messageImages.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {messageImages.map((img, idx) => (
+                          <img
+                            key={idx}
+                            src={img.url}
+                            alt={img.filename || `Image ${idx + 1}`}
+                            className="max-h-48 rounded-lg object-contain"
+                          />
+                        ))}
+                      </div>
+                    )}
+
+                    {messageText && (
+                      <div className="text-sm whitespace-pre-wrap prose prose-sm dark:prose-invert max-w-none">
+                        {messageText}
+                      </div>
+                    )}
 
                     {/* Insert to Note Action */}
                     {message.role === 'assistant' && onInsertToNote && messageText && (
@@ -517,33 +683,82 @@ export function AIAssistantTab({
       </div>
 
       {/* Input Area */}
-      <form
-        onSubmit={handleSubmit}
-        className="p-4 border-t border-zinc-200 dark:border-zinc-700"
-      >
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask anything..."
-            className="flex-1 px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
-            disabled={isLoading}
-          />
-          <button
-            type="submit"
-            disabled={!input?.trim() || isLoading}
-            className={cn(
-              'px-4 py-2.5 rounded-xl text-white font-medium text-sm transition-all',
-              input?.trim() && !isLoading
-                ? 'bg-cyan-600 hover:bg-cyan-700'
-                : 'bg-zinc-300 dark:bg-zinc-700 cursor-not-allowed'
-            )}
-          >
-            <span className="material-symbols-outlined text-[20px]">send</span>
-          </button>
-        </div>
-      </form>
+      <div className="border-t border-zinc-200 dark:border-zinc-700">
+        {/* File Error */}
+        {fileError && (
+          <div className="px-4 pt-2">
+            <div className="text-xs text-red-500 dark:text-red-400 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">warning</span>
+              {fileError}
+            </div>
+          </div>
+        )}
+
+        {/* Image Preview */}
+        {selectedFiles.length > 0 && (
+          <div className="px-4 pt-2">
+            <ImagePreview files={selectedFiles} onRemove={handleRemoveFile} />
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="p-4">
+          <div className="flex gap-2">
+            {/* Hidden file input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileSelect}
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              multiple
+              className="hidden"
+            />
+
+            {/* Image upload button */}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              className={cn(
+                'px-3 py-2.5 rounded-xl transition-all flex items-center justify-center',
+                isLoading
+                  ? 'bg-zinc-200 dark:bg-zinc-700 cursor-not-allowed'
+                  : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700'
+              )}
+              title="Upload image"
+            >
+              <span className={cn(
+                'material-symbols-outlined text-[20px]',
+                selectedFiles.length > 0
+                  ? 'text-cyan-600 dark:text-cyan-400'
+                  : 'text-zinc-500 dark:text-zinc-400'
+              )}>
+                image
+              </span>
+            </button>
+
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={selectedFiles.length > 0 ? "Add a message about the image..." : "Ask anything..."}
+              className="flex-1 px-4 py-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-xl text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 dark:focus:ring-cyan-400"
+              disabled={isLoading}
+            />
+            <button
+              type="submit"
+              disabled={(!input?.trim() && selectedFiles.length === 0) || isLoading}
+              className={cn(
+                'px-4 py-2.5 rounded-xl text-white font-medium text-sm transition-all',
+                (input?.trim() || selectedFiles.length > 0) && !isLoading
+                  ? 'bg-cyan-600 hover:bg-cyan-700'
+                  : 'bg-zinc-300 dark:bg-zinc-700 cursor-not-allowed'
+              )}
+            >
+              <span className="material-symbols-outlined text-[20px]">send</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
