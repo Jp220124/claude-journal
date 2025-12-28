@@ -36,11 +36,15 @@ export async function POST(
     }
 
     // Fetch the note with password hash
-    const { data: note, error: fetchError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: noteData, error: fetchError } = await (supabase as any)
       .from('notes')
       .select('*')
       .eq('id', noteId)
       .single()
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const note = noteData as any
 
     if (fetchError || !note) {
       return new Response(
@@ -81,6 +85,7 @@ export async function POST(
     }
 
     // Return the note content (excluding password_hash)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { password_hash: _, ...noteWithoutHash } = note
 
     return new Response(

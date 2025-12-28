@@ -43,11 +43,14 @@ export async function POST(
     }
 
     // Verify the note exists and belongs to this user
-    const { data: note, error: fetchError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: noteData, error: fetchError } = await (supabase as any)
       .from('notes')
       .select('id, user_id, is_locked')
       .eq('id', noteId)
       .single()
+
+    const note = noteData as { id: string; user_id: string; is_locked: boolean } | null
 
     if (fetchError || !note) {
       return new Response(
@@ -74,7 +77,8 @@ export async function POST(
     const passwordHash = await bcrypt.hash(password, 12)
 
     // Update the note
-    const { data: updatedNote, error: updateError } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: updatedNote, error: updateError } = await (supabase as any)
       .from('notes')
       .update({
         is_locked: true,
