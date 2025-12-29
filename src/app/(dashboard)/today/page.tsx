@@ -506,10 +506,15 @@ export default function TodayPage() {
 
       setIsSaving(true)
       try {
+        // Check if the selected category is a recurring category
+        // For recurring tasks, due_date should be null so they appear every day
+        const selectedCategory = categories.find(cat => cat.id === newTaskCategoryId)
+        const isRecurringCategory = selectedCategory?.is_recurring ?? false
+
         const result = await createTodo({
           title: newTaskTitle,
           priority: newTaskPriority,
-          due_date: newTaskDueDate,
+          due_date: isRecurringCategory ? null : newTaskDueDate,
           due_time: newTaskDueTime || null,
           category_id: newTaskCategoryId,
         })

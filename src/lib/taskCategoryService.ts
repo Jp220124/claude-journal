@@ -474,13 +474,32 @@ export async function reorderTasksInCategory(
 
 /**
  * Move todo to a different category
+ * If moving to a recurring category, also clears due_date so the task appears every day
  */
 export async function moveTodoToCategory(todoId: string, categoryId: string | null): Promise<boolean> {
   const supabase = createClient()
 
+  // Check if the target category is a recurring category
+  let isRecurringCategory = false
+  if (categoryId) {
+    const { data: category } = await supabase
+      .from('task_categories')
+      .select('is_recurring')
+      .eq('id', categoryId)
+      .single()
+
+    isRecurringCategory = category?.is_recurring ?? false
+  }
+
+  // Build update object - for recurring categories, clear due_date
+  const updateData: { category_id: string | null; due_date?: null } = { category_id: categoryId }
+  if (isRecurringCategory) {
+    updateData.due_date = null
+  }
+
   const { error } = await supabase
     .from('todos')
-    .update({ category_id: categoryId })
+    .update(updateData)
     .eq('id', todoId)
 
   if (error) {

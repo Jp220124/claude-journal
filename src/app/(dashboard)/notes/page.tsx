@@ -1507,6 +1507,7 @@ function NotesPageContent() {
                     ) : (
                       <NotesEditor
                         ref={editorRef}
+                        noteId={selectedNote.id}
                         content={selectedNote.content || ''}
                         onUpdate={({ json, text }) => {
                           const wordCount = text.trim().split(/\s+/).filter(Boolean).length
@@ -1538,6 +1539,7 @@ function NotesPageContent() {
                   /* Regular Note - TipTap Editor */
                   <NotesEditor
                     ref={editorRef}
+                    noteId={selectedNote.id}
                     content={selectedNote.content || ''}
                     onUpdate={({ json, text }) => {
                       const wordCount = text.trim().split(/\s+/).filter(Boolean).length

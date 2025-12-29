@@ -24,6 +24,8 @@ import { cn } from '@/lib/utils'
 import { EditorToolbar } from './EditorToolbar'
 import { LinkEditorModal } from './LinkEditorModal'
 import { Columns, Column } from './extensions/ColumnsExtension'
+import { StickyAnchorMark } from './extensions/StickyAnchorMark'
+import { AnnotationLayer } from './AnnotationLayer'
 import { markdownToTiptap } from '@/lib/markdownToTiptap'
 
 const lowlight = createLowlight(common)
@@ -110,6 +112,8 @@ const EDITOR_EXTENSIONS = [
   // Multi-column layout
   Columns,
   Column,
+  // Sticky note anchors
+  StickyAnchorMark,
 ]
 
 /**
@@ -370,6 +374,7 @@ interface NotesEditorProps {
   editable?: boolean
   className?: string
   onImageUpload?: (file: File) => Promise<string | null>
+  noteId?: string // Required for sticky notes feature
 }
 
 export interface NotesEditorHandle {
@@ -384,10 +389,13 @@ export const NotesEditor = forwardRef<NotesEditorHandle, NotesEditorProps>(funct
   editable = true,
   className,
   onImageUpload,
+  noteId,
 }, ref) {
   const [linkModalOpen, setLinkModalOpen] = useState(false)
   const [currentLink, setCurrentLink] = useState({ url: '', text: '' })
+  const [showStickyNotes, setShowStickyNotes] = useState(true)
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const editorContainerRef = useRef<HTMLDivElement>(null)
   // Track when the editor itself is making changes to prevent external content from overwriting
   const isLocalUpdate = useRef(false)
   const lastLocalUpdateTime = useRef(0)
@@ -561,9 +569,25 @@ export const NotesEditor = forwardRef<NotesEditorHandle, NotesEditorProps>(funct
         editor={editor}
         onImageUpload={onImageUpload ? handleImageUpload : undefined}
         onLinkClick={openLinkModal}
+        showStickyNotes={showStickyNotes}
+        onToggleStickyNotes={() => setShowStickyNotes(!showStickyNotes)}
+        hasStickyNotes={!!noteId && editable}
       />
 
-      <EditorContent editor={editor} className="min-h-[300px]" />
+      {/* Editor Container with Sticky Notes Layer */}
+      <div ref={editorContainerRef} className="relative min-h-[300px]">
+        <EditorContent editor={editor} className="min-h-[300px]" />
+
+        {/* Sticky Notes Annotation Layer */}
+        {noteId && editable && (
+          <AnnotationLayer
+            noteId={noteId}
+            editor={editor}
+            containerRef={editorContainerRef}
+            visible={showStickyNotes}
+          />
+        )}
+      </div>
 
       {/* Word Count Footer */}
       <div className="flex items-center justify-between text-xs text-slate-400 mt-4 pt-4 border-t border-slate-100">

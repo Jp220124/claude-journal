@@ -4,13 +4,23 @@ import { Editor } from '@tiptap/react'
 import { useState, useRef, useCallback } from 'react'
 import { cn } from '@/lib/utils'
 
+// Type for editor storage with sticky notes
+interface EditorStorageWithStickyNotes {
+  stickyNotes?: {
+    createStickyNote: (anchorId: string, anchorText: string) => Promise<void>
+  }
+}
+
 interface EditorToolbarProps {
   editor: Editor
   onImageUpload?: (file: File) => void
   onLinkClick: () => void
+  showStickyNotes?: boolean
+  onToggleStickyNotes?: () => void
+  hasStickyNotes?: boolean
 }
 
-export function EditorToolbar({ editor, onImageUpload, onLinkClick }: EditorToolbarProps) {
+export function EditorToolbar({ editor, onImageUpload, onLinkClick, showStickyNotes = true, onToggleStickyNotes, hasStickyNotes = false }: EditorToolbarProps) {
   const [showHeadingMenu, setShowHeadingMenu] = useState(false)
   const [showHighlightMenu, setShowHighlightMenu] = useState(false)
   const [showTableMenu, setShowTableMenu] = useState(false)
@@ -583,6 +593,45 @@ export function EditorToolbar({ editor, onImageUpload, onLinkClick }: EditorTool
           </div>
         )}
       </div>
+
+      {/* Sticky Note */}
+      <ToolbarButton
+        onClick={() => {
+          // Check if there's a selection
+          const { from, to } = editor.state.selection
+          if (from === to) {
+            alert('Please select some text first to attach a sticky note')
+            return
+          }
+          // Set the sticky anchor mark and trigger the create callback
+          const anchorId = crypto.randomUUID()
+          const anchorText = editor.state.doc.textBetween(from, to, ' ')
+          editor.chain().focus().setStickyAnchor(anchorId).run()
+
+          // Trigger creation of sticky note via editor storage
+          const storage = editor.storage as EditorStorageWithStickyNotes
+          if (storage.stickyNotes?.createStickyNote) {
+            storage.stickyNotes.createStickyNote(anchorId, anchorText)
+          }
+        }}
+        isActive={editor.isActive('stickyAnchor')}
+        title="Add Sticky Note (Alt+S)"
+      >
+        <span className="material-symbols-outlined text-[18px]">sticky_note_2</span>
+      </ToolbarButton>
+
+      {/* Toggle Sticky Notes Visibility */}
+      {hasStickyNotes && onToggleStickyNotes && (
+        <ToolbarButton
+          onClick={onToggleStickyNotes}
+          isActive={showStickyNotes}
+          title={showStickyNotes ? 'Hide Sticky Notes' : 'Show Sticky Notes'}
+        >
+          <span className="material-symbols-outlined text-[18px]">
+            {showStickyNotes ? 'visibility' : 'visibility_off'}
+          </span>
+        </ToolbarButton>
+      )}
 
       <ToolbarDivider />
 
