@@ -77,9 +77,11 @@ const EDITOR_EXTENSIONS = [
     },
   }),
   Link.configure({
-    openOnClick: false,
+    openOnClick: true,
     HTMLAttributes: {
       class: 'notes-link',
+      target: '_blank',
+      rel: 'noopener noreferrer',
     },
   }),
   Underline,
