@@ -1,8 +1,9 @@
-import { streamText, convertToModelMessages, UIMessage } from 'ai'
+import { streamText, convertToModelMessages, UIMessage, stepCountIs } from 'ai'
 import { createClient } from '@/lib/supabase/server'
 import { createAIProvider, createGoogleOAuthProvider, defaultSystemPrompt, type AIProviderType } from '@/lib/ai/providers'
 import { decryptApiKey } from '@/lib/ai/encryption'
 import { getValidAccessToken } from '@/lib/ai/oauth'
+import { webTools } from '@/lib/ai/tools'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -195,11 +196,13 @@ export async function POST(request: Request) {
     // Convert UIMessages to model messages
     const modelMessages = await convertToModelMessages(normalizedMessages)
 
-    // Stream the response
+    // Stream the response with web tools enabled
     const result = streamText({
       model: aiModel,
       system: systemPrompt,
       messages: modelMessages,
+      tools: webTools,
+      stopWhen: stepCountIs(5), // Allow up to 5 tool calls for multi-step operations
       onError({ error }) {
         console.error('Stream error:', error)
       },
