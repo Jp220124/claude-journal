@@ -1,6 +1,9 @@
 import { tool } from 'ai'
 import { z } from 'zod'
 
+// Firecrawl API for advanced web scraping (handles JavaScript, anti-bot protection)
+const FIRECRAWL_API_URL = 'https://api.firecrawl.dev/v1/scrape'
+
 /**
  * Validate URL to prevent SSRF attacks
  * Blocks localhost, internal IPs, and non-http(s) protocols
@@ -44,8 +47,9 @@ function isValidExternalUrl(url: string): { valid: boolean; reason?: string } {
 
 /**
  * Truncate content to a maximum length while preserving complete sentences
+ * Increased to 25000 chars for better e-commerce content coverage
  */
-function truncateContent(content: string, maxLength: number = 10000): string {
+function truncateContent(content: string, maxLength: number = 25000): string {
   if (content.length <= maxLength) return content
 
   // Try to cut at a sentence boundary
@@ -62,20 +66,129 @@ function truncateContent(content: string, maxLength: number = 10000): string {
 }
 
 /**
+ * Fetch URL content using Firecrawl API
+ * Handles JavaScript rendering, anti-bot protection, and dynamic content
+ */
+async function fetchWithFirecrawl(url: string): Promise<{ content?: string; error?: string }> {
+  const apiKey = process.env.FIRECRAWL_API_KEY
+
+  if (!apiKey) {
+    return { error: 'Firecrawl API key not configured' }
+  }
+
+  try {
+    console.log(`[Firecrawl] Fetching: ${url}`)
+
+    const response = await fetch(FIRECRAWL_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        url,
+        formats: ['markdown'],
+        timeout: 45000, // 45 second timeout for heavy JS sites
+        waitFor: 3000,  // Wait 3s for dynamic content to load
+      }),
+      signal: AbortSignal.timeout(50000), // 50 second total timeout
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error')
+      console.log(`[Firecrawl] Error ${response.status}: ${errorText}`)
+      return { error: `Firecrawl error (${response.status}): ${response.statusText}` }
+    }
+
+    const data = await response.json() as {
+      success?: boolean
+      data?: {
+        markdown?: string
+        metadata?: {
+          title?: string
+          description?: string
+          statusCode?: number
+        }
+      }
+      error?: string
+    }
+
+    if (!data.success || !data.data?.markdown) {
+      console.log(`[Firecrawl] No content returned:`, data.error || 'Unknown')
+      return { error: data.error || 'No content extracted from page' }
+    }
+
+    console.log(`[Firecrawl] Success: ${data.data.markdown.length} chars`)
+    return { content: data.data.markdown }
+  } catch (error) {
+    console.error('[Firecrawl] Fetch error:', error)
+
+    if (error instanceof Error) {
+      if (error.name === 'TimeoutError' || error.message.includes('timeout')) {
+        return { error: 'Firecrawl request timed out' }
+      }
+      return { error: `Firecrawl error: ${error.message}` }
+    }
+
+    return { error: 'Firecrawl request failed' }
+  }
+}
+
+/**
+ * Fetch URL content using Jina Reader (fallback)
+ */
+async function fetchWithJina(url: string): Promise<{ content?: string; error?: string }> {
+  try {
+    const jinaUrl = `https://r.jina.ai/${url}`
+    console.log(`[Jina] Fetching: ${jinaUrl}`)
+
+    const response = await fetch(jinaUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/markdown',
+        'User-Agent': 'JournalApp/1.0',
+      },
+      signal: AbortSignal.timeout(20000), // 20 second timeout
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error')
+      console.log(`[Jina] Error ${response.status}: ${errorText}`)
+      return { error: `Jina error (${response.status}): ${response.statusText}` }
+    }
+
+    const content = await response.text()
+    console.log(`[Jina] Success: ${content.length} chars`)
+    return { content }
+  } catch (error) {
+    console.error('[Jina] Fetch error:', error)
+
+    if (error instanceof Error) {
+      if (error.name === 'TimeoutError' || error.message.includes('timeout')) {
+        return { error: 'Jina request timed out' }
+      }
+      return { error: `Jina error: ${error.message}` }
+    }
+
+    return { error: 'Jina request failed' }
+  }
+}
+
+/**
  * AI Tools for web access capabilities
- * Uses Jina AI Reader (free) for URL fetching and web search
+ * Uses Firecrawl (primary) for JavaScript-heavy sites, Jina Reader (fallback)
  */
 export const webTools = {
   /**
    * Fetch and read content from a URL
-   * Uses Jina Reader (r.jina.ai) to convert web pages to clean markdown
+   * Uses Firecrawl for JavaScript rendering and anti-bot bypass, falls back to Jina
    */
   fetchUrl: tool({
-    description: 'Fetch and read content from a URL. Returns the page content as clean, readable markdown. Use this when you need to read the content of a specific webpage, article, or documentation.',
+    description: 'Fetch and read content from a URL. Returns the page content as clean, readable markdown. Use this when you need to read the content of a specific webpage, article, product page, or documentation. Works well with e-commerce sites like Amazon, Myntra, Flipkart.',
     inputSchema: z.object({
       url: z.string().url().describe('The full URL to fetch content from (must start with http:// or https://)')
     }),
-    execute: async ({ url }: { url: string }): Promise<{ content?: string; error?: string; url: string }> => {
+    execute: async ({ url }: { url: string }): Promise<{ content?: string; error?: string; url: string; source?: string }> => {
       console.log(`[AI Tool] fetchUrl called for: ${url}`)
 
       // Validate URL
@@ -85,51 +198,44 @@ export const webTools = {
         return { error: validation.reason || 'Invalid URL', url }
       }
 
-      try {
-        // Use Jina Reader to fetch and convert to markdown
-        const jinaUrl = `https://r.jina.ai/${url}`
-        console.log(`[AI Tool] Fetching via Jina: ${jinaUrl}`)
+      // Check if Firecrawl is configured
+      const hasFirecrawl = Boolean(process.env.FIRECRAWL_API_KEY)
+      console.log(`[AI Tool] Firecrawl available: ${hasFirecrawl}`)
 
-        const response = await fetch(jinaUrl, {
-          method: 'GET',
-          headers: {
-            'Accept': 'text/markdown',
-            'User-Agent': 'JournalApp/1.0',
-          },
-          signal: AbortSignal.timeout(15000), // 15 second timeout
-        })
+      // Try Firecrawl first (better for e-commerce, JavaScript sites)
+      if (hasFirecrawl) {
+        const firecrawlResult = await fetchWithFirecrawl(url)
 
-        if (!response.ok) {
-          const errorText = await response.text().catch(() => 'Unknown error')
-          console.log(`[AI Tool] Jina fetch failed: ${response.status} - ${errorText}`)
+        if (firecrawlResult.content) {
+          const truncatedContent = truncateContent(firecrawlResult.content)
           return {
-            error: `Failed to fetch URL (HTTP ${response.status}): ${response.statusText}`,
-            url
+            content: truncatedContent,
+            url,
+            source: 'firecrawl'
           }
         }
 
-        const content = await response.text()
-        console.log(`[AI Tool] Successfully fetched ${content.length} characters`)
+        console.log(`[AI Tool] Firecrawl failed, trying Jina fallback...`)
+      }
 
-        // Truncate if too long
-        const truncatedContent = truncateContent(content)
+      // Fallback to Jina Reader
+      const jinaResult = await fetchWithJina(url)
 
+      if (jinaResult.content) {
+        const truncatedContent = truncateContent(jinaResult.content)
         return {
           content: truncatedContent,
-          url
+          url,
+          source: 'jina'
         }
-      } catch (error) {
-        console.error('[AI Tool] fetchUrl error:', error)
-
-        if (error instanceof Error) {
-          if (error.name === 'TimeoutError' || error.message.includes('timeout')) {
-            return { error: 'Request timed out. The page took too long to load.', url }
-          }
-          return { error: `Failed to fetch: ${error.message}`, url }
-        }
-
-        return { error: 'An unexpected error occurred while fetching the URL', url }
       }
+
+      // Both failed
+      const errorMessage = hasFirecrawl
+        ? `Failed to fetch content. Firecrawl and Jina both failed. The site may be blocking automated access.`
+        : `Failed to fetch content: ${jinaResult.error || 'Unknown error'}. For better results with e-commerce sites, configure FIRECRAWL_API_KEY.`
+
+      return { error: errorMessage, url }
     },
   }),
 
