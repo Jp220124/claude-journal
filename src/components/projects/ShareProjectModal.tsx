@@ -126,7 +126,7 @@ export function ShareProjectModal({
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-[var(--muted)] transition-colors"
           >
-            <span className="material-icons text-[var(--muted-foreground)]">close</span>
+            <span className="material-symbols-outlined text-[var(--muted-foreground)]">close</span>
           </button>
         </div>
 
@@ -169,7 +169,7 @@ export function ShareProjectModal({
               {createdLink && (
                 <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="material-icons text-green-500">check_circle</span>
+                    <span className="material-symbols-outlined text-green-500">check_circle</span>
                     <span className="text-sm font-medium text-green-600 dark:text-green-400">
                       Link created successfully!
                     </span>
@@ -227,7 +227,7 @@ export function ShareProjectModal({
                         onChange={() => setFormData(prev => ({ ...prev, access_level: level }))}
                         className="sr-only"
                       />
-                      <span className="material-icons text-[var(--primary)]">
+                      <span className="material-symbols-outlined text-[var(--primary)]">
                         {ACCESS_LEVEL_INFO[level].icon}
                       </span>
                       <div>
@@ -304,7 +304,7 @@ export function ShareProjectModal({
                 onClick={handleCreateLink}
                 loading={isLoading}
               >
-                <span className="material-icons mr-2 text-sm">link</span>
+                <span className="material-symbols-outlined mr-2 text-sm">link</span>
                 Create Share Link
               </Button>
             </div>
@@ -312,7 +312,7 @@ export function ShareProjectModal({
             <div className="space-y-3">
               {shareLinks.length === 0 ? (
                 <div className="text-center py-8 text-[var(--muted-foreground)]">
-                  <span className="material-icons text-4xl mb-2 opacity-50">link_off</span>
+                  <span className="material-symbols-outlined text-4xl mb-2 opacity-50">link_off</span>
                   <p>No share links yet</p>
                   <p className="text-sm">Create your first link to share this project</p>
                 </div>
@@ -378,7 +378,7 @@ function ShareLinkCard({
       {/* Header */}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
-          <span className="material-icons text-[var(--primary)]">
+          <span className="material-symbols-outlined text-[var(--primary)]">
             {ACCESS_LEVEL_INFO[link.access_level].icon}
           </span>
           <div>
@@ -396,18 +396,18 @@ function ShareLinkCard({
       {/* Stats */}
       <div className="flex items-center gap-4 text-xs text-[var(--muted-foreground)] mb-3">
         <span className="flex items-center gap-1">
-          <span className="material-icons text-sm">people</span>
+          <span className="material-symbols-outlined text-sm">people</span>
           {link.use_count} {link.max_uses ? `/ ${link.max_uses}` : ''} uses
         </span>
         {link.password_hash && (
           <span className="flex items-center gap-1">
-            <span className="material-icons text-sm">lock</span>
+            <span className="material-symbols-outlined text-sm">lock</span>
             Password protected
           </span>
         )}
         {link.expires_at && (
           <span className="flex items-center gap-1">
-            <span className="material-icons text-sm">schedule</span>
+            <span className="material-symbols-outlined text-sm">schedule</span>
             Expires {new Date(link.expires_at).toLocaleDateString()}
           </span>
         )}
@@ -422,7 +422,7 @@ function ShareLinkCard({
           disabled={isDisabled}
           className="flex-1"
         >
-          <span className="material-icons text-sm mr-1">
+          <span className="material-symbols-outlined text-sm mr-1">
             {isCopied ? 'check' : 'content_copy'}
           </span>
           {isCopied ? 'Copied!' : 'Copy Link'}
@@ -434,7 +434,7 @@ function ShareLinkCard({
             onClick={onDeactivate}
             title="Deactivate link"
           >
-            <span className="material-icons text-sm">block</span>
+            <span className="material-symbols-outlined text-sm">block</span>
           </Button>
         )}
         <Button
@@ -444,7 +444,7 @@ function ShareLinkCard({
           className="text-red-500 hover:text-red-600"
           title="Delete link"
         >
-          <span className="material-icons text-sm">delete</span>
+          <span className="material-symbols-outlined text-sm">delete</span>
         </Button>
       </div>
     </div>

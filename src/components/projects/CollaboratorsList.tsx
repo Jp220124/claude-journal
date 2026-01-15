@@ -199,7 +199,7 @@ export function CollaboratorsList({
                 className="text-red-500 hover:text-red-600"
                 title="Leave project"
               >
-                <span className="material-icons text-sm">logout</span>
+                <span className="material-symbols-outlined text-sm">logout</span>
               </Button>
             ) : collab.can_remove ? (
               <Button
@@ -209,7 +209,7 @@ export function CollaboratorsList({
                 className="text-red-500 hover:text-red-600"
                 title="Remove collaborator"
               >
-                <span className="material-icons text-sm">person_remove</span>
+                <span className="material-symbols-outlined text-sm">person_remove</span>
               </Button>
             ) : null}
           </div>

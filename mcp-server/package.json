@@ -1,0 +1,39 @@
+{
+  "name": "@claude-journal/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP Server for Claude Journal - Access notes, tasks, and journal entries via AI",
+  "type": "module",
+  "main": "build/index.js",
+  "bin": {
+    "journal-mcp": "build/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node build/index.js",
+    "dev": "tsx watch src/index.ts",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "journal",
+    "notes",
+    "tasks"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.1.0",
+    "@supabase/supabase-js": "^2.47.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "tsx": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

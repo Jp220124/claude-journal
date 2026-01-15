@@ -112,7 +112,7 @@ export default function JoinProjectPage() {
       <div className="min-h-screen flex items-center justify-center bg-[var(--background)] p-4">
         <div className="max-w-md w-full text-center">
           <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-4">
-            <span className="material-icons text-3xl text-red-500">error_outline</span>
+            <span className="material-symbols-outlined text-3xl text-red-500">error_outline</span>
           </div>
           <h1 className="text-2xl font-bold text-[var(--foreground)] mb-2">
             Invalid Link
@@ -137,7 +137,7 @@ export default function JoinProjectPage() {
           {/* Header with gradient */}
           <div className="bg-gradient-to-r from-[var(--primary)] to-purple-600 p-8 text-center">
             <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center mx-auto mb-4">
-              <span className="material-icons text-3xl text-white">group_add</span>
+              <span className="material-symbols-outlined text-3xl text-white">group_add</span>
             </div>
             <h1 className="text-2xl font-bold text-white mb-1">
               Join Project
@@ -156,7 +156,7 @@ export default function JoinProjectPage() {
               </h2>
               {validation?.access_level && (
                 <div className="flex items-center justify-center gap-2 mt-2">
-                  <span className="material-icons text-sm text-[var(--primary)]">
+                  <span className="material-symbols-outlined text-sm text-[var(--primary)]">
                     {ACCESS_LEVEL_INFO[validation.access_level].icon}
                   </span>
                   <span className="text-sm text-[var(--muted-foreground)]">
@@ -176,11 +176,11 @@ export default function JoinProjectPage() {
                   {validation.access_level === 'viewer' && (
                     <>
                       <li className="flex items-center gap-2">
-                        <span className="material-icons text-xs text-green-500">check</span>
+                        <span className="material-symbols-outlined text-xs text-green-500">check</span>
                         View all project content
                       </li>
                       <li className="flex items-center gap-2">
-                        <span className="material-icons text-xs text-green-500">check</span>
+                        <span className="material-symbols-outlined text-xs text-green-500">check</span>
                         Download files
                       </li>
                     </>
@@ -188,15 +188,15 @@ export default function JoinProjectPage() {
                   {validation.access_level === 'member' && (
                     <>
                       <li className="flex items-center gap-2">
-                        <span className="material-icons text-xs text-green-500">check</span>
+                        <span className="material-symbols-outlined text-xs text-green-500">check</span>
                         View and edit tasks
                       </li>
                       <li className="flex items-center gap-2">
-                        <span className="material-icons text-xs text-green-500">check</span>
+                        <span className="material-symbols-outlined text-xs text-green-500">check</span>
                         Add and edit notes
                       </li>
                       <li className="flex items-center gap-2">
-                        <span className="material-icons text-xs text-green-500">check</span>
+                        <span className="material-symbols-outlined text-xs text-green-500">check</span>
                         Upload and manage files
                       </li>
                     </>
@@ -204,15 +204,15 @@ export default function JoinProjectPage() {
                   {validation.access_level === 'admin' && (
                     <>
                       <li className="flex items-center gap-2">
-                        <span className="material-icons text-xs text-green-500">check</span>
+                        <span className="material-symbols-outlined text-xs text-green-500">check</span>
                         Full project access
                       </li>
                       <li className="flex items-center gap-2">
-                        <span className="material-icons text-xs text-green-500">check</span>
+                        <span className="material-symbols-outlined text-xs text-green-500">check</span>
                         Manage team members
                       </li>
                       <li className="flex items-center gap-2">
-                        <span className="material-icons text-xs text-green-500">check</span>
+                        <span className="material-symbols-outlined text-xs text-green-500">check</span>
                         Create and manage share links
                       </li>
                     </>
@@ -225,7 +225,7 @@ export default function JoinProjectPage() {
             {validation?.requires_password && (
               <div>
                 <label className="block text-sm font-medium text-[var(--foreground)] mb-2">
-                  <span className="material-icons text-sm mr-1 align-middle">lock</span>
+                  <span className="material-symbols-outlined text-sm mr-1 align-middle">lock</span>
                   This link is password protected
                 </label>
                 <Input
@@ -258,7 +258,7 @@ export default function JoinProjectPage() {
                   Please sign in to join this project
                 </p>
                 <Button className="w-full" onClick={handleLogin}>
-                  <span className="material-icons mr-2 text-sm">login</span>
+                  <span className="material-symbols-outlined mr-2 text-sm">login</span>
                   Sign In to Join
                 </Button>
               </div>
@@ -273,7 +273,7 @@ export default function JoinProjectPage() {
                   loading={isJoining}
                   disabled={isJoining}
                 >
-                  <span className="material-icons mr-2 text-sm">group_add</span>
+                  <span className="material-symbols-outlined mr-2 text-sm">group_add</span>
                   Join Project
                 </Button>
               </div>
