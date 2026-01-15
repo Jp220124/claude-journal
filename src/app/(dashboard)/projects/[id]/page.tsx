@@ -36,6 +36,10 @@ import type {
   ProjectFile,
 } from '@/types/projects'
 import { markdownToHtml } from '@/lib/markdownToTiptap'
+import { ShareProjectModal } from '@/components/projects/ShareProjectModal'
+import { CollaboratorsList } from '@/components/projects/CollaboratorsList'
+import { useProjectRealtime } from '@/hooks/useProjectRealtime'
+import { canManageShareLinks } from '@/lib/projectSharingService'
 
 // Tab types
 type TabType = 'overview' | 'tasks' | 'notes' | 'calendar' | 'files'
@@ -329,6 +333,18 @@ export default function ProjectDetailPage() {
   // Keyboard shortcuts help
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
 
+  // Share modal
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [canShare, setCanShare] = useState(false)
+
+  // Real-time updates
+  const realtimeState = useProjectRealtime(isDemo ? null : projectId, {
+    onAnyChange: () => {
+      // Refetch project data when changes occur
+      if (!isDemo) loadProject()
+    },
+  })
+
   // Load project
   const loadProject = useCallback(async () => {
     if (isDemo) {
@@ -356,6 +372,17 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     loadProject()
   }, [loadProject])
+
+  // Check if user can manage share links
+  useEffect(() => {
+    const checkSharePermission = async () => {
+      if (!isDemo && projectId) {
+        const result = await canManageShareLinks(projectId)
+        setCanShare(result)
+      }
+    }
+    checkSharePermission()
+  }, [projectId, isDemo])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -999,6 +1026,23 @@ export default function ProjectDetailPage() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            {/* Real-time indicator */}
+            {realtimeState.isConnected && (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-green-50 dark:bg-green-900/30 rounded-full" title="Real-time sync active">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-xs text-green-600 dark:text-green-400">Live</span>
+              </div>
+            )}
+            {/* Share button */}
+            {canShare && (
+              <button
+                onClick={() => setShowShareModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90 transition-colors text-sm font-medium"
+              >
+                <span className="material-symbols-outlined text-[18px]">share</span>
+                Share
+              </button>
+            )}
             <button
               onClick={() => router.push(`/projects/${projectId}/settings`)}
               className="p-2 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -3009,6 +3053,16 @@ export default function ProjectDetailPage() {
         <div className="fixed bottom-4 right-4 left-4 sm:left-auto px-4 py-3 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl text-amber-800 dark:text-amber-200 text-sm shadow-lg z-50">
           <span className="font-medium">Demo Mode:</span> Changes are not saved.
         </div>
+      )}
+
+      {/* Share Project Modal */}
+      {project && (
+        <ShareProjectModal
+          isOpen={showShareModal}
+          onClose={() => setShowShareModal(false)}
+          projectId={projectId}
+          projectName={project.name}
+        />
       )}
     </div>
   )
