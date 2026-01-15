@@ -50,3 +50,6 @@ next-env.d.ts
 telegram-bot/node_modules
 telegram-bot/dist
 nul
+
+# MCP Server (separate project)
+mcp-server/
